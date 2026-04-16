@@ -2,7 +2,7 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
 // Path to your SQLite database file
-const dbPath = path.resolve(__dirname, 'database/hypermart.db');
+const dbPath = path.resolve(__dirname, '..', 'database', 'hypermart.db');
 
 // Create and open the database connection
 const db = new sqlite3.Database(dbPath, (err) => {
