@@ -77,3 +77,16 @@ exports.login = async (req, res) => {
 exports.logout = (req, res) => {
   res.json({ success: true });
 };
+
+/**
+ * GET /api/users
+ * Returns users list from the database (used by the Users List page).
+ */
+exports.listUsers = async (req, res) => {
+  try {
+    const users = await userModel.listUsers();
+    return res.json({ users });
+  } catch {
+    return res.status(500).json({ error: 'Server error.' });
+  }
+};

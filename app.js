@@ -12,6 +12,9 @@ const db = require('./config/db');
 // Import auth routes (mounted under /api/auth).
 const userRoutes = require('./routes/userRoutes');
 
+// Import users list routes (mounted under /api/users).
+const usersRoutes = require('./routes/usersRoutes');
+
 // Create the Express application instance.
 const app = express();
 
@@ -35,8 +38,11 @@ app.use((req, res, next) => {
 // Parse JSON request bodies.
 app.use(express.json());
 
-// Mount routes (keeps existing frontend URLs like /api/auth/login).
+// Mount auth routes (keeps existing frontend URLs like /api/auth/login).
 app.use('/api/auth', userRoutes);
+
+// Mount user management routes.
+app.use('/api/users', usersRoutes);
 
 // GET /test-db
 // Quick health check to confirm the SQLite connection works.
