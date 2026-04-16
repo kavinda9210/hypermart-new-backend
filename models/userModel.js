@@ -35,12 +35,25 @@ exports.getRoleById = (id) =>
   });
 
 /**
+ * Get a user row by id.
+ * @param {string} id
+ * @returns {Promise<object|null>}
+ */
+exports.getUserById = (id) =>
+  new Promise((resolve, reject) => {
+    db.get('SELECT * FROM users WHERE id = ?', [id], (err, row) => {
+      if (err) return reject(err);
+      resolve(row);
+    });
+  });
+
+/**
  * List users with display fields used by the UI.
  * @returns {Promise<Array<{id:string,name:string,email:string,role:string|null,mobile:string|null,gender:string|null,branch:string|null,status:string|null}>>}
  */
 exports.listUsers = () =>
   new Promise((resolve, reject) => {
-    // Join related tables to get friendly names for role/branch/status.
+    // Join related tables to get friendly names for role/branch.
     db.all(
       `
       SELECT
@@ -51,11 +64,14 @@ exports.listUsers = () =>
         u.number AS mobile,
         u.gender,
         b.name AS branch,
-        s.status_name AS status
+        COALESCE(u.status_id, 1) AS status_id,
+        CASE
+          WHEN COALESCE(u.status_id, 1) = 1 THEN 'Active'
+          ELSE 'Inactive'
+        END AS status
       FROM users u
       LEFT JOIN roles r ON r.id = u.roles_id
       LEFT JOIN branches b ON b.id = u.branch_id
-      LEFT JOIN statuses s ON s.id = u.status_id
       ORDER BY u.name
       `,
       [],
@@ -132,10 +148,11 @@ exports.createUser = async (payload) => {
         password,
         yearly_leave_allowance,
         roles_id,
+        status_id,
         gender,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         id,
@@ -146,6 +163,7 @@ exports.createUser = async (payload) => {
         payload.passwordHash,
         yearlyLeave,
         payload.roles_id ?? null,
+        1,
         payload.gender ?? null,
         now,
         now,
@@ -168,3 +186,23 @@ exports.createUser = async (payload) => {
     yearly_leave_allowance: yearlyLeave,
   };
 };
+
+/**
+ * Update a user's active status.
+ * @param {string} id
+ * @param {0|1} statusId
+ * @returns {Promise<number>} number of updated rows
+ */
+exports.updateUserStatus = (id, statusId) =>
+  new Promise((resolve, reject) => {
+    const now = new Date().toISOString();
+
+    db.run(
+      'UPDATE users SET status_id = ?, updated_at = ? WHERE id = ?',
+      [statusId, now, id],
+      function (err) {
+        if (err) return reject(err);
+        resolve(this.changes || 0);
+      }
+    );
+  });

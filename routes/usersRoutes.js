@@ -31,5 +31,9 @@ router.get('/branches', requireAuth, userController.listBranches);
 // Creates a new user in the database (requires a valid JWT).
 router.post('/', requireAuth, userController.createUser);
 
+// PATCH /api/users/:id/status
+// Activates/deactivates a user (requires a valid JWT).
+router.patch('/:id/status', requireAuth, userController.updateUserStatus);
+
 // Export the router for mounting in app.js.
 module.exports = router;

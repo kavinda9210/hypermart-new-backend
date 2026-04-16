@@ -62,6 +62,7 @@ exports.login = async (req, res) => {
         name: user.name,
         email: user.email,
         role: role ? role.role_name : null,
+        status_id: user.status_id === null || user.status_id === undefined ? 1 : Number(user.status_id),
       },
     });
   } catch {
@@ -171,6 +172,34 @@ exports.createUser = async (req, res) => {
     });
 
     return res.status(201).json({ user: created });
+  } catch {
+    return res.status(500).json({ error: 'Server error.' });
+  }
+};
+
+/**
+ * PATCH /api/users/:id/status
+ * Updates user's status_id (1 = Active, 0 = Inactive).
+ */
+exports.updateUserStatus = async (req, res) => {
+  const { id } = req.params;
+  const { status_id } = req.body || {};
+
+  const statusNum = Number(status_id);
+  if (!Number.isInteger(statusNum) || (statusNum !== 0 && statusNum !== 1)) {
+    return res.status(400).json({ error: 'status_id must be 0 or 1.' });
+  }
+
+  try {
+    const changes = await userModel.updateUserStatus(id, statusNum);
+    if (!changes) return res.status(404).json({ error: 'User not found.' });
+
+    return res.json({
+      success: true,
+      id,
+      status_id: statusNum,
+      status: statusNum === 1 ? 'Active' : 'Inactive',
+    });
   } catch {
     return res.status(500).json({ error: 'Server error.' });
   }
