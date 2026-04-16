@@ -1,10 +1,16 @@
 const express = require('express');
 const db = require('./db');
 
+// Auth routes
+const authRoutes = require('./auth/authRoutes');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
+
+// Mount auth routes
+app.use('/api/auth', authRoutes);
 
 // Example route to test DB connection
 app.get('/test-db', (req, res) => {
