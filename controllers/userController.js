@@ -90,3 +90,88 @@ exports.listUsers = async (req, res) => {
     return res.status(500).json({ error: 'Server error.' });
   }
 };
+
+/**
+ * GET /api/users/roles
+ * Returns roles for the Add User form.
+ */
+exports.listRoles = async (req, res) => {
+  try {
+    const roles = await userModel.listRoles();
+    return res.json({ roles });
+  } catch {
+    return res.status(500).json({ error: 'Server error.' });
+  }
+};
+
+/**
+ * GET /api/users/branches
+ * Returns branches for the Add User form.
+ */
+exports.listBranches = async (req, res) => {
+  try {
+    const branches = await userModel.listBranches();
+    return res.json({ branches });
+  } catch {
+    return res.status(500).json({ error: 'Server error.' });
+  }
+};
+
+/**
+ * POST /api/users
+ * Creates a new user in the database.
+ */
+exports.createUser = async (req, res) => {
+  const {
+    name,
+    email,
+    mobile,
+    gender,
+    roles_id,
+    branch_id,
+    password,
+    password_confirmation,
+    yearly_leave_allowance,
+  } = req.body || {};
+
+  if (!name || !email || !mobile || !password) {
+    return res.status(400).json({ error: 'Name, email, mobile, and password are required.' });
+  }
+
+  if (password_confirmation !== undefined && password !== password_confirmation) {
+    return res.status(400).json({ error: 'Password confirmation does not match.' });
+  }
+
+  const roleId = roles_id === '' || roles_id === undefined || roles_id === null ? null : Number(roles_id);
+  const branchId = branch_id === '' || branch_id === undefined || branch_id === null ? null : Number(branch_id);
+
+  if (roleId !== null && Number.isNaN(roleId)) {
+    return res.status(400).json({ error: 'Invalid role.' });
+  }
+
+  if (branchId !== null && Number.isNaN(branchId)) {
+    return res.status(400).json({ error: 'Invalid branch.' });
+  }
+
+  try {
+    const existing = await userModel.getUserByEmail(email);
+    if (existing) return res.status(409).json({ error: 'Email already exists.' });
+
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    const created = await userModel.createUser({
+      name,
+      email,
+      mobile,
+      gender: gender || null,
+      roles_id: roleId,
+      branch_id: branchId,
+      passwordHash,
+      yearly_leave_allowance,
+    });
+
+    return res.status(201).json({ user: created });
+  } catch {
+    return res.status(500).json({ error: 'Server error.' });
+  }
+};

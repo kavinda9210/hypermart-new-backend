@@ -65,3 +65,106 @@ exports.listUsers = () =>
       }
     );
   });
+
+/**
+ * List roles for dropdowns.
+ * @returns {Promise<Array<{id:number, role_name:string}>>}
+ */
+exports.listRoles = () =>
+  new Promise((resolve, reject) => {
+    db.all('SELECT id, role_name FROM roles ORDER BY id', [], (err, rows) => {
+      if (err) return reject(err);
+      resolve(rows || []);
+    });
+  });
+
+/**
+ * List branches for dropdowns.
+ * @returns {Promise<Array<{id:number, name:string}>>}
+ */
+exports.listBranches = () =>
+  new Promise((resolve, reject) => {
+    db.all('SELECT id, name FROM branches ORDER BY id', [], (err, rows) => {
+      if (err) return reject(err);
+      resolve(rows || []);
+    });
+  });
+
+/**
+ * Get next numeric user id as TEXT.
+ * @returns {Promise<string>}
+ */
+const getNextUserId = () =>
+  new Promise((resolve, reject) => {
+    db.get(
+      'SELECT COALESCE(MAX(CAST(id AS INTEGER)), 0) + 1 AS nextId FROM users',
+      [],
+      (err, row) => {
+        if (err) return reject(err);
+        resolve(String(row?.nextId ?? 1));
+      }
+    );
+  });
+
+/**
+ * Create a new user.
+ * @param {{name:string,email:string,mobile:string,gender?:string|null,roles_id?:number|null,branch_id?:number|null,passwordHash:string,yearly_leave_allowance?:number|null}} payload
+ * @returns {Promise<{id:string,name:string,email:string,mobile:string,gender:string|null,roles_id:number|null,branch_id:number|null,yearly_leave_allowance:number|null}>}
+ */
+exports.createUser = async (payload) => {
+  const id = await getNextUserId();
+  const now = new Date().toISOString();
+
+  const yearlyLeave =
+    payload.yearly_leave_allowance === undefined || payload.yearly_leave_allowance === null
+      ? 0
+      : Number(payload.yearly_leave_allowance);
+
+  await new Promise((resolve, reject) => {
+    db.run(
+      `
+      INSERT INTO users (
+        id,
+        branch_id,
+        name,
+        email,
+        number,
+        password,
+        yearly_leave_allowance,
+        roles_id,
+        gender,
+        created_at,
+        updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        id,
+        payload.branch_id ?? null,
+        payload.name,
+        payload.email,
+        payload.mobile,
+        payload.passwordHash,
+        yearlyLeave,
+        payload.roles_id ?? null,
+        payload.gender ?? null,
+        now,
+        now,
+      ],
+      (err) => {
+        if (err) return reject(err);
+        resolve();
+      }
+    );
+  });
+
+  return {
+    id,
+    name: payload.name,
+    email: payload.email,
+    mobile: payload.mobile,
+    gender: payload.gender ?? null,
+    roles_id: payload.roles_id ?? null,
+    branch_id: payload.branch_id ?? null,
+    yearly_leave_allowance: yearlyLeave,
+  };
+};

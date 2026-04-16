@@ -19,5 +19,17 @@ const userController = require('../controllers/userController');
 // Returns users from the database (requires a valid JWT).
 router.get('/', requireAuth, userController.listUsers);
 
+// GET /api/users/roles
+// Returns roles from the database (requires a valid JWT).
+router.get('/roles', requireAuth, userController.listRoles);
+
+// GET /api/users/branches
+// Returns branches from the database (requires a valid JWT).
+router.get('/branches', requireAuth, userController.listBranches);
+
+// POST /api/users
+// Creates a new user in the database (requires a valid JWT).
+router.post('/', requireAuth, userController.createUser);
+
 // Export the router for mounting in app.js.
 module.exports = router;
