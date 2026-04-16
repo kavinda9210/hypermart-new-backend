@@ -21,6 +21,19 @@ exports.getUserByEmail = (email) =>
   });
 
 /**
+ * Get a user row by mobile/number.
+ * @param {string} mobile
+ * @returns {Promise<object|null>}
+ */
+exports.getUserByMobile = (mobile) =>
+  new Promise((resolve, reject) => {
+    db.get('SELECT * FROM users WHERE number = ?', [mobile], (err, row) => {
+      if (err) return reject(err);
+      resolve(row);
+    });
+  });
+
+/**
  * Get a role row by id.
  * @param {number|string} id
  * @returns {Promise<object|null>}
@@ -200,6 +213,89 @@ exports.updateUserStatus = (id, statusId) =>
     db.run(
       'UPDATE users SET status_id = ?, updated_at = ? WHERE id = ?',
       [statusId, now, id],
+      function (err) {
+        if (err) return reject(err);
+        resolve(this.changes || 0);
+      }
+    );
+  });
+
+/**
+ * Update a user (profile fields; optional password update).
+ * @param {string} id
+ * @param {{name:string,email:string,mobile:string,gender?:string|null,roles_id?:number|null,branch_id?:number|null,yearly_leave_allowance?:number|null,passwordHash?:string}} payload
+ * @returns {Promise<number>} number of updated rows
+ */
+exports.updateUser = (id, payload) =>
+  new Promise((resolve, reject) => {
+    const now = new Date().toISOString();
+
+    const yearlyLeave =
+      payload.yearly_leave_allowance === undefined || payload.yearly_leave_allowance === null
+        ? 0
+        : Number(payload.yearly_leave_allowance);
+
+    if (payload.passwordHash) {
+      db.run(
+        `
+        UPDATE users
+        SET
+          branch_id = ?,
+          name = ?,
+          email = ?,
+          number = ?,
+          password = ?,
+          yearly_leave_allowance = ?,
+          roles_id = ?,
+          gender = ?,
+          updated_at = ?
+        WHERE id = ?
+        `,
+        [
+          payload.branch_id ?? null,
+          payload.name,
+          payload.email,
+          payload.mobile,
+          payload.passwordHash,
+          yearlyLeave,
+          payload.roles_id ?? null,
+          payload.gender ?? null,
+          now,
+          id,
+        ],
+        function (err) {
+          if (err) return reject(err);
+          resolve(this.changes || 0);
+        }
+      );
+      return;
+    }
+
+    db.run(
+      `
+      UPDATE users
+      SET
+        branch_id = ?,
+        name = ?,
+        email = ?,
+        number = ?,
+        yearly_leave_allowance = ?,
+        roles_id = ?,
+        gender = ?,
+        updated_at = ?
+      WHERE id = ?
+      `,
+      [
+        payload.branch_id ?? null,
+        payload.name,
+        payload.email,
+        payload.mobile,
+        yearlyLeave,
+        payload.roles_id ?? null,
+        payload.gender ?? null,
+        now,
+        id,
+      ],
       function (err) {
         if (err) return reject(err);
         resolve(this.changes || 0);

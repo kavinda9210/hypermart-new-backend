@@ -31,6 +31,14 @@ router.get('/branches', requireAuth, userController.listBranches);
 // Creates a new user in the database (requires a valid JWT).
 router.post('/', requireAuth, userController.createUser);
 
+// GET /api/users/:id
+// Returns a single user for editing (requires a valid JWT).
+router.get('/:id', requireAuth, userController.getUser);
+
+// PUT /api/users/:id
+// Updates a single user (requires a valid JWT).
+router.put('/:id', requireAuth, userController.updateUser);
+
 // PATCH /api/users/:id/status
 // Activates/deactivates a user (requires a valid JWT).
 router.patch('/:id/status', requireAuth, userController.updateUserStatus);

@@ -158,6 +158,9 @@ exports.createUser = async (req, res) => {
     const existing = await userModel.getUserByEmail(email);
     if (existing) return res.status(409).json({ error: 'Email already exists.' });
 
+    const existingMobile = await userModel.getUserByMobile(mobile);
+    if (existingMobile) return res.status(409).json({ error: 'Mobile number already exists.' });
+
     const passwordHash = await bcrypt.hash(password, 10);
 
     const created = await userModel.createUser({
@@ -199,6 +202,125 @@ exports.updateUserStatus = async (req, res) => {
       id,
       status_id: statusNum,
       status: statusNum === 1 ? 'Active' : 'Inactive',
+    });
+  } catch {
+    return res.status(500).json({ error: 'Server error.' });
+  }
+};
+
+/**
+ * GET /api/users/:id
+ * Returns one user's data for the Edit User form.
+ */
+exports.getUser = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const user = await userModel.getUserById(id);
+    if (!user) return res.status(404).json({ error: 'User not found.' });
+
+    return res.json({
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        mobile: user.number,
+        gender: user.gender,
+        roles_id: user.roles_id,
+        branch_id: user.branch_id,
+        yearly_leave_allowance: user.yearly_leave_allowance,
+        status_id: user.status_id === null || user.status_id === undefined ? 1 : Number(user.status_id),
+      },
+    });
+  } catch {
+    return res.status(500).json({ error: 'Server error.' });
+  }
+};
+
+/**
+ * PUT /api/users/:id
+ * Updates one user (used by the Edit User form).
+ */
+exports.updateUser = async (req, res) => {
+  const { id } = req.params;
+  const {
+    name,
+    email,
+    mobile,
+    gender,
+    roles_id,
+    branch_id,
+    password,
+    password_confirmation,
+    yearly_leave_allowance,
+  } = req.body || {};
+
+  if (!name || !email || !mobile) {
+    return res.status(400).json({ error: 'Name, email, and mobile are required.' });
+  }
+
+  const pwd = typeof password === 'string' ? password : '';
+  if (pwd && password_confirmation !== undefined && pwd !== password_confirmation) {
+    return res.status(400).json({ error: 'Password confirmation does not match.' });
+  }
+
+  const roleId = roles_id === '' || roles_id === undefined || roles_id === null ? null : Number(roles_id);
+  const branchId = branch_id === '' || branch_id === undefined || branch_id === null ? null : Number(branch_id);
+
+  if (roleId !== null && Number.isNaN(roleId)) {
+    return res.status(400).json({ error: 'Invalid role.' });
+  }
+
+  if (branchId !== null && Number.isNaN(branchId)) {
+    return res.status(400).json({ error: 'Invalid branch.' });
+  }
+
+  try {
+    const existingUser = await userModel.getUserById(id);
+    if (!existingUser) return res.status(404).json({ error: 'User not found.' });
+
+    const existingEmail = await userModel.getUserByEmail(email);
+    if (existingEmail && String(existingEmail.id) !== String(id)) {
+      return res.status(409).json({ error: 'Email already exists.' });
+    }
+
+    const existingMobile = await userModel.getUserByMobile(mobile);
+    if (existingMobile && String(existingMobile.id) !== String(id)) {
+      return res.status(409).json({ error: 'Mobile number already exists.' });
+    }
+
+    const payload = {
+      name,
+      email,
+      mobile,
+      gender: gender || null,
+      roles_id: roleId,
+      branch_id: branchId,
+      yearly_leave_allowance,
+    };
+
+    if (pwd) {
+      payload.passwordHash = await bcrypt.hash(pwd, 10);
+    }
+
+    const changes = await userModel.updateUser(id, payload);
+    if (!changes) return res.status(404).json({ error: 'User not found.' });
+
+    const updated = await userModel.getUserById(id);
+
+    return res.json({
+      success: true,
+      user: {
+        id: updated.id,
+        name: updated.name,
+        email: updated.email,
+        mobile: updated.number,
+        gender: updated.gender,
+        roles_id: updated.roles_id,
+        branch_id: updated.branch_id,
+        yearly_leave_allowance: updated.yearly_leave_allowance,
+        status_id: updated.status_id === null || updated.status_id === undefined ? 1 : Number(updated.status_id),
+      },
     });
   } catch {
     return res.status(500).json({ error: 'Server error.' });
