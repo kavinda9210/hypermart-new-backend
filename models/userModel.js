@@ -48,6 +48,81 @@ exports.getRoleById = (id) =>
   });
 
 /**
+ * Get a role row by id, including permission count.
+ * @param {number|string} id
+ * @returns {Promise<object|null>}
+ */
+exports.getRoleWithPermissionCount = (id) =>
+  new Promise((resolve, reject) => {
+    db.get(
+      `
+      SELECT
+        r.*,
+        COUNT(rhp.permissions_id) AS permission_count
+      FROM roles r
+      LEFT JOIN roles_has_permissions rhp ON rhp.roles_id = r.id
+      WHERE r.id = ?
+      GROUP BY r.id
+      `,
+      [id],
+      (err, row) => {
+        if (err) return reject(err);
+        resolve(row || null);
+      }
+    );
+  });
+
+/**
+ * Update role salary settings.
+ * @param {number|string} id
+ * @param {{salary_type:string,hourly_wage:number,monthly_salary?:number|null,daily_rate?:number|null,no_pay_rate:number,allowance:number,ot_included:0|1,ot_rate?:number|null,double_ot_rate?:number|null,triple_ot_rate?:number|null,epf_enabled:0|1}} payload
+ * @returns {Promise<number>} number of updated rows
+ */
+exports.updateRole = (id, payload) =>
+  new Promise((resolve, reject) => {
+    const now = new Date().toISOString();
+
+    db.run(
+      `
+      UPDATE roles
+      SET
+        salary_type = ?,
+        hourly_wage = ?,
+        monthly_salary = ?,
+        daily_rate = ?,
+        no_pay_rate = ?,
+        allowance = ?,
+        ot_included = ?,
+        ot_rate = ?,
+        double_ot_rate = ?,
+        triple_ot_rate = ?,
+        epf_enabled = ?,
+        updated_at = ?
+      WHERE id = ?
+      `,
+      [
+        payload.salary_type,
+        payload.hourly_wage,
+        payload.monthly_salary ?? null,
+        payload.daily_rate ?? null,
+        payload.no_pay_rate,
+        payload.allowance,
+        payload.ot_included,
+        payload.ot_rate ?? null,
+        payload.double_ot_rate ?? null,
+        payload.triple_ot_rate ?? null,
+        payload.epf_enabled,
+        now,
+        id,
+      ],
+      function (err) {
+        if (err) return reject(err);
+        resolve(this.changes || 0);
+      }
+    );
+  });
+
+/**
  * Get a user row by id.
  * @param {string} id
  * @returns {Promise<object|null>}
@@ -96,15 +171,28 @@ exports.listUsers = () =>
   });
 
 /**
- * List roles for dropdowns.
- * @returns {Promise<Array<{id:number, role_name:string}>>}
+ * List roles (used by Role List page and dropdowns).
+ * Includes salary settings columns plus a computed permission count.
+ * @returns {Promise<Array<object>>}
  */
 exports.listRoles = () =>
   new Promise((resolve, reject) => {
-    db.all('SELECT id, role_name FROM roles ORDER BY id', [], (err, rows) => {
-      if (err) return reject(err);
-      resolve(rows || []);
-    });
+    db.all(
+      `
+      SELECT
+        r.*,
+        COUNT(rhp.permissions_id) AS permission_count
+      FROM roles r
+      LEFT JOIN roles_has_permissions rhp ON rhp.roles_id = r.id
+      GROUP BY r.id
+      ORDER BY r.id
+      `,
+      [],
+      (err, rows) => {
+        if (err) return reject(err);
+        resolve(rows || []);
+      }
+    );
   });
 
 /**

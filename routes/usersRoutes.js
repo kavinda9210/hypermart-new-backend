@@ -23,6 +23,14 @@ router.get('/', requireAuth, userController.listUsers);
 // Returns roles from the database (requires a valid JWT).
 router.get('/roles', requireAuth, userController.listRoles);
 
+// GET /api/users/roles/:id
+// Returns a single role (used by Salary Settings modal).
+router.get('/roles/:id', requireAuth, userController.getRole);
+
+// PUT /api/users/roles/:id
+// Updates a single role's salary settings.
+router.put('/roles/:id', requireAuth, userController.updateRole);
+
 // GET /api/users/branches
 // Returns branches from the database (requires a valid JWT).
 router.get('/branches', requireAuth, userController.listBranches);

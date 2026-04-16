@@ -106,6 +106,143 @@ exports.listRoles = async (req, res) => {
 };
 
 /**
+ * GET /api/users/roles/:id
+ * Returns one role (used by Salary Settings modal).
+ */
+exports.getRole = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const role = await userModel.getRoleWithPermissionCount(id);
+    if (!role) return res.status(404).json({ error: 'Role not found.' });
+
+    return res.json({ role });
+  } catch {
+    return res.status(500).json({ error: 'Server error.' });
+  }
+};
+
+/**
+ * PUT /api/users/roles/:id
+ * Updates role salary settings (used by Salary Settings modal).
+ */
+exports.updateRole = async (req, res) => {
+  const { id } = req.params;
+
+  const roleName = String(req.user?.role || '').toLowerCase();
+  if (!roleName.includes('admin')) {
+    return res.status(403).json({ error: 'Forbidden.' });
+  }
+
+  const {
+    salary_type,
+    hourly_wage,
+    monthly_salary,
+    daily_rate,
+    no_pay_rate,
+    allowance,
+    ot_included,
+    ot_rate,
+    double_ot_rate,
+    triple_ot_rate,
+    epf_enabled,
+  } = req.body || {};
+
+  const salaryType = String(salary_type || '').trim();
+  if (salaryType !== 'hourly' && salaryType !== 'monthly') {
+    return res.status(400).json({ error: 'salary_type must be hourly or monthly.' });
+  }
+
+  const hourlyWageNum = Number(hourly_wage);
+  if (!Number.isFinite(hourlyWageNum) || hourlyWageNum < 0) {
+    return res.status(400).json({ error: 'hourly_wage must be a non-negative number.' });
+  }
+
+  const noPayNum = Number(no_pay_rate);
+  if (!Number.isFinite(noPayNum) || noPayNum < 0) {
+    return res.status(400).json({ error: 'no_pay_rate must be a non-negative number.' });
+  }
+
+  const allowanceNum = Number(allowance);
+  if (!Number.isFinite(allowanceNum) || allowanceNum < 0) {
+    return res.status(400).json({ error: 'allowance must be a non-negative number.' });
+  }
+
+  const otIncludedNum = ot_included ? 1 : 0;
+  const epfEnabledNum = epf_enabled ? 1 : 0;
+
+  const monthlySalaryNum =
+    monthly_salary === '' || monthly_salary === undefined || monthly_salary === null
+      ? null
+      : Number(monthly_salary);
+
+  if (monthlySalaryNum !== null && (!Number.isFinite(monthlySalaryNum) || monthlySalaryNum < 0)) {
+    return res.status(400).json({ error: 'monthly_salary must be a non-negative number.' });
+  }
+
+  const dailyRateNum =
+    daily_rate === '' || daily_rate === undefined || daily_rate === null
+      ? null
+      : Number(daily_rate);
+
+  if (dailyRateNum !== null && (!Number.isFinite(dailyRateNum) || dailyRateNum < 0)) {
+    return res.status(400).json({ error: 'daily_rate must be a non-negative number.' });
+  }
+
+  const numOrNull = (v) => {
+    if (v === '' || v === undefined || v === null) return null;
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0) return NaN;
+    return n;
+  };
+
+  let otRateNum = numOrNull(ot_rate);
+  let doubleOtNum = numOrNull(double_ot_rate);
+  let tripleOtNum = numOrNull(triple_ot_rate);
+
+  if ([otRateNum, doubleOtNum, tripleOtNum].some((n) => Number.isNaN(n))) {
+    return res.status(400).json({ error: 'OT rates must be non-negative numbers.' });
+  }
+
+  if (!otIncludedNum) {
+    otRateNum = null;
+    doubleOtNum = null;
+    tripleOtNum = null;
+  }
+
+  if (salaryType === 'monthly' && monthlySalaryNum === null) {
+    return res.status(400).json({ error: 'monthly_salary is required when salary_type is monthly.' });
+  }
+
+  try {
+    const existing = await userModel.getRoleById(id);
+    if (!existing) return res.status(404).json({ error: 'Role not found.' });
+
+    const payload = {
+      salary_type: salaryType,
+      hourly_wage: hourlyWageNum,
+      monthly_salary: monthlySalaryNum,
+      daily_rate: dailyRateNum,
+      no_pay_rate: noPayNum,
+      allowance: allowanceNum,
+      ot_included: otIncludedNum,
+      ot_rate: otRateNum,
+      double_ot_rate: doubleOtNum,
+      triple_ot_rate: tripleOtNum,
+      epf_enabled: epfEnabledNum,
+    };
+
+    const changes = await userModel.updateRole(id, payload);
+    if (!changes) return res.status(404).json({ error: 'Role not found.' });
+
+    const updated = await userModel.getRoleWithPermissionCount(id);
+    return res.json({ success: true, role: updated });
+  } catch {
+    return res.status(500).json({ error: 'Server error.' });
+  }
+};
+
+/**
  * GET /api/users/branches
  * Returns branches for the Add User form.
  */
