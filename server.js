@@ -7,6 +7,17 @@ const authRoutes = require('./auth/authRoutes');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Basic CORS for local development
+const allowedOrigin = process.env.CORS_ORIGIN || 'http://localhost:5173';
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', allowedOrigin);
+  res.header('Vary', 'Origin');
+  res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
 app.use(express.json());
 
 // Mount auth routes
