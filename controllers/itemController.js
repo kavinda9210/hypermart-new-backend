@@ -217,6 +217,11 @@ exports.createItem = async (req, res) => {
 
     const tempId = await itemModel.getNextTempId();
 
+    // Accept image_path from frontend (like updateItem)
+    let image_path = null;
+    if (typeof req.body?.image_path === 'string' && req.body.image_path.trim() !== '') {
+      image_path = req.body.image_path.trim();
+    }
     const payload = {
       id: crypto.randomUUID(),
       item_code: finalCode,
@@ -238,7 +243,7 @@ exports.createItem = async (req, res) => {
       additional_fees_percentage: 0,
       additional_fees_amount: 0,
       start_qty: null,
-      image_path: null,
+      image_path,
       status_id: 1,
       has_expiry_date: expiryEnabled,
       show_expiry_alert_in: expiryEnabled ? alertIn : null,
