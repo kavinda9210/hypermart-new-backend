@@ -5,6 +5,7 @@
 
 // Import the Express web framework.
 const express = require('express');
+const path = require('path');
 
 // Import the shared SQLite connection (single DB instance for the app).
 const db = require('./config/db');
@@ -18,6 +19,8 @@ const usersRoutes = require('./routes/usersRoutes');
 // Import item categories routes (mounted under /api/item-categories).
 const itemCategoriesRoutes = require('./routes/itemCategoriesRoutes');
 const suppliersRoutes = require('./routes/suppliersRoutes');
+const itemsRoutes = require('./routes/itemsRoutes');
+const uploadRoutes = require('./routes/uploadRoutes');
 
 // Create the Express application instance.
 const app = express();
@@ -42,6 +45,10 @@ app.use((req, res, next) => {
 // Parse JSON request bodies.
 app.use(express.json());
 
+// Serve uploaded files locally (e.g., item images).
+// Configure directory via UPLOAD_DIR, defaulting to <backend>/upload
+const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, 'upload');
+app.use('/upload', express.static(path.join(__dirname, 'public', 'images', 'upload')));
 // Mount auth routes (keeps existing frontend URLs like /api/auth/login).
 app.use('/api/auth', userRoutes);
 
@@ -51,6 +58,8 @@ app.use('/api/users', usersRoutes);
 // Mount item categories routes.
 app.use('/api/item-categories', itemCategoriesRoutes);
 app.use('/api/suppliers', suppliersRoutes);
+app.use('/api/items', itemsRoutes);
+app.use('/api/upload', uploadRoutes);
 
 // GET /test-db
 // Quick health check to confirm the SQLite connection works.
