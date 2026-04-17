@@ -21,6 +21,7 @@ const itemCategoriesRoutes = require('./routes/itemCategoriesRoutes');
 const suppliersRoutes = require('./routes/suppliersRoutes');
 const itemsRoutes = require('./routes/itemsRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
+const stockRoutes = require('./routes/stockRoutes');
 
 // Create the Express application instance.
 const app = express();
@@ -60,6 +61,7 @@ app.use('/api/item-categories', itemCategoriesRoutes);
 app.use('/api/suppliers', suppliersRoutes);
 app.use('/api/items', itemsRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/stock', stockRoutes);
 
 // GET /test-db
 // Quick health check to confirm the SQLite connection works.

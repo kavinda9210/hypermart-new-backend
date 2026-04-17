@@ -350,3 +350,21 @@ exports.createItem = (payload) =>
       }
     );
   });
+
+exports.updateItemQuantity = (id, quantity) =>
+  new Promise((resolve, reject) => {
+    const now = new Date().toISOString();
+    const qty = Number(quantity);
+    if (!Number.isFinite(qty) || qty < 0) {
+      return reject(new Error('Invalid quantity'));
+    }
+
+    db.run(
+      `UPDATE items SET quantity = ?, updated_at = ? WHERE id = ?`,
+      [Math.floor(qty), now, id],
+      function (err) {
+        if (err) return reject(err);
+        resolve({ changes: this.changes, updated_at: now });
+      }
+    );
+  });
