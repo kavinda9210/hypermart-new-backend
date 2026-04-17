@@ -17,6 +17,7 @@ const usersRoutes = require('./routes/usersRoutes');
 
 // Import item categories routes (mounted under /api/item-categories).
 const itemCategoriesRoutes = require('./routes/itemCategoriesRoutes');
+const suppliersRoutes = require('./routes/suppliersRoutes');
 
 // Create the Express application instance.
 const app = express();
@@ -49,6 +50,7 @@ app.use('/api/users', usersRoutes);
 
 // Mount item categories routes.
 app.use('/api/item-categories', itemCategoriesRoutes);
+app.use('/api/suppliers', suppliersRoutes);
 
 // GET /test-db
 // Quick health check to confirm the SQLite connection works.
