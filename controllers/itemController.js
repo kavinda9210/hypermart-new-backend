@@ -1,3 +1,44 @@
+// Bulk import items from CSV
+const crypto = require('crypto');
+exports.importItems = async (req, res) => {
+  const items = req.body?.items;
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: 'No items to import.' });
+  }
+  try {
+    let tempId = Date.now();
+    for (const row of items) {
+      await itemModel.createItem({
+        id: crypto.randomUUID(),
+        temp_id: tempId++,
+        item_code: row['Item Code'] || null,
+        barcode: row['Barcode'] || null,
+        item_name: row['Item Name'],
+        item_name_2: row['Item Name 2'] || null,
+        description: row['Description'] || null,
+        scale_item: Number(row['Scale Item']) || 0,
+        scale_group_no: Number(row['Scale Group No']) || 1,
+        pos_order_no: row['POS Order No'] ? Number(row['POS Order No']) : null,
+        suppliers_id: row['Supplier ID'] ? Number(row['Supplier ID']) : null,
+        item_categories_id: row['Category ID'] ? Number(row['Category ID']) : null,
+        quantity: row['Qty'] ? Number(row['Qty']) : 0,
+        unit_type_id: row['Unit Type ID'] ? Number(row['Unit Type ID']) : 1,
+        minimum_qty: row['Min Qty'] ? Number(row['Min Qty']) : 0,
+        purchase_price: row['Purchase Price'] ? Number(row['Purchase Price']) : 0,
+        market_price: row['Market Price'] ? Number(row['Market Price']) : null,
+        retail_price: row['Retail Price'] ? Number(row['Retail Price']) : 0,
+        wholesale_price: row['Wholesale Price'] ? Number(row['Wholesale Price']) : 0,
+        additional_fees_percentage: row['Additional Fees Percentage'] ? Number(row['Additional Fees Percentage']) : 0,
+        additional_fees_amount: row['Additional Fees Amount'] ? Number(row['Additional Fees Amount']) : 0,
+        status_id: row['Status ID'] ? Number(row['Status ID']) : 1,
+        start_qty: row['Start Qty'] ? Number(row['Start Qty']) : 0,
+      });
+    }
+    return res.json({ success: true, count: items.length });
+  } catch (err) {
+    return res.status(500).json({ error: 'Import failed.' });
+  }
+};
 // PATCH /api/items/:id/status
 exports.updateItemStatus = async (req, res) => {
   const id = String(req.params?.id || '').trim();
@@ -30,7 +71,7 @@ exports.updateItemStatus = async (req, res) => {
  * Item endpoints.
  */
 
-const crypto = require('crypto');
+// const crypto = require('crypto');
 const itemModel = require('../models/itemModel');
 
 const normalizeMoney = (value) => {
