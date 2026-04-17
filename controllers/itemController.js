@@ -88,6 +88,21 @@ exports.listItems = async (req, res) => {
   const sortBy = String(req.query?.sort_by || 'item_code');
   const sortOrder = String(req.query?.sort_order || 'asc');
 
+  // Optional item type filter for Export Panel
+  // Accept: type_filter=scale|normal OR scale_item=1|0
+  const typeFilter = String(req.query?.type_filter || req.query?.type || '').trim().toLowerCase();
+  const scaleItemRaw = req.query?.scale_item;
+  let scaleItem = null;
+  if (typeFilter) {
+    if (typeFilter === 'scale') scaleItem = 1;
+    else if (typeFilter === 'normal') scaleItem = 0;
+    else return res.status(400).json({ error: 'Invalid item type filter.' });
+  } else if (scaleItemRaw !== undefined && scaleItemRaw !== '') {
+    const n = Number(scaleItemRaw);
+    if (n === 0 || n === 1) scaleItem = n;
+    else return res.status(400).json({ error: 'Invalid scale_item filter.' });
+  }
+
   const limitRaw = req.query?.limit;
   const offsetRaw = req.query?.offset;
   const limit = limitRaw === undefined ? 30 : Number(limitRaw);
@@ -111,6 +126,7 @@ exports.listItems = async (req, res) => {
         searchTerm: search,
         categoryId,
         supplierId,
+        scaleItem,
         sortBy,
         sortOrder,
         limit: safeLimit,
@@ -120,11 +136,71 @@ exports.listItems = async (req, res) => {
         searchTerm: search,
         categoryId,
         supplierId,
+        scaleItem,
       }),
     ]);
     return res.json({ items, total, limit: safeLimit, offset: safeOffset });
   } catch {
     return res.status(500).json({ error: 'Server error.' });
+  }
+};
+
+const csvEscape = (value) => {
+  const s = value === null || value === undefined ? '' : String(value);
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+};
+
+// GET/POST /api/items/export
+// - Query/body supports: type_filter=scale|normal
+// - POST body supports: { ids: ["uuid", ...] }
+exports.exportItems = async (req, res) => {
+  const typeFilter = String(req.query?.type_filter || req.body?.type_filter || req.body?.type || '').trim().toLowerCase();
+  let scaleItem = null;
+  if (typeFilter) {
+    if (typeFilter === 'scale') scaleItem = 1;
+    else if (typeFilter === 'normal') scaleItem = 0;
+    else return res.status(400).json({ error: 'Invalid item type filter.' });
+  }
+
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids : null;
+
+  try {
+    const rows = await itemModel.listItemsForExport({ scaleItem, ids });
+
+    const header = [
+      'Item Code',
+      'Item Name',
+      'Category',
+      'Unit Type ID',
+      'Retail Price',
+      'Type',
+      'Scale Group No',
+    ];
+
+    const lines = [header.map(csvEscape).join(',')];
+    for (const r of rows) {
+      const type = Number(r.scale_item) === 1 ? 'scale' : 'normal';
+      lines.push([
+        r.item_code,
+        r.item_name,
+        r.category_name || r.item_categories_id || '',
+        r.unit_type_id ?? '',
+        r.retail_price ?? '',
+        type,
+        r.scale_group_no ?? '',
+      ].map(csvEscape).join(','));
+    }
+
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `items_export_${stamp}.csv`;
+    const csv = '\ufeff' + lines.join('\n');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.status(200).send(csv);
+  } catch (err) {
+    return res.status(500).json({ error: 'Export failed.' });
   }
 };
 

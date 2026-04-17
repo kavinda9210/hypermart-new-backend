@@ -18,7 +18,7 @@ exports.updateItemStatus = (id, status_id) =>
 
 const db = require('../config/db');
 
-const buildItemsWhere = ({ searchTerm = '', categoryId = null, supplierId = null }) => {
+const buildItemsWhere = ({ searchTerm = '', categoryId = null, supplierId = null, scaleItem = null }) => {
   const where = [];
   const params = [];
 
@@ -34,6 +34,12 @@ const buildItemsWhere = ({ searchTerm = '', categoryId = null, supplierId = null
   if (Number.isInteger(supplierId) && supplierId > 0) {
     where.push('suppliers_id = ?');
     params.push(supplierId);
+  }
+
+  // scale_item: 1 = Scale items, 0 = Normal items
+  if (scaleItem === 0 || scaleItem === 1) {
+    where.push('scale_item = ?');
+    params.push(scaleItem);
   }
 
   const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
@@ -64,7 +70,7 @@ exports.getNextTempId = () =>
     });
   });
 
-exports.listItems = ({ searchTerm = '', categoryId = null, supplierId = null, sortBy = 'item_code', sortOrder = 'asc', limit = 30, offset = 0 }) =>
+exports.listItems = ({ searchTerm = '', categoryId = null, supplierId = null, scaleItem = null, sortBy = 'item_code', sortOrder = 'asc', limit = 30, offset = 0 }) =>
   new Promise((resolve, reject) => {
     const safeLimit = Number.isInteger(limit) && limit > 0 ? limit : 30;
     const safeOffset = Number.isInteger(offset) && offset >= 0 ? offset : 0;
@@ -80,7 +86,7 @@ exports.listItems = ({ searchTerm = '', categoryId = null, supplierId = null, so
     const safeSortBy = sortKeyMap[sortBy] || 'item_code';
     const safeSortOrder = String(sortOrder).toLowerCase() === 'desc' ? 'DESC' : 'ASC';
 
-    const { whereClause, params } = buildItemsWhere({ searchTerm, categoryId, supplierId });
+    const { whereClause, params } = buildItemsWhere({ searchTerm, categoryId, supplierId, scaleItem });
 
     db.all(
       `
@@ -89,6 +95,8 @@ exports.listItems = ({ searchTerm = '', categoryId = null, supplierId = null, so
         item_code,
         barcode,
         item_name,
+        scale_item,
+        scale_group_no,
         suppliers_id,
         item_categories_id,
         quantity,
@@ -118,9 +126,9 @@ exports.listItems = ({ searchTerm = '', categoryId = null, supplierId = null, so
     );
   });
 
-exports.countItems = ({ searchTerm = '', categoryId = null, supplierId = null }) =>
+exports.countItems = ({ searchTerm = '', categoryId = null, supplierId = null, scaleItem = null }) =>
   new Promise((resolve, reject) => {
-    const { whereClause, params } = buildItemsWhere({ searchTerm, categoryId, supplierId });
+    const { whereClause, params } = buildItemsWhere({ searchTerm, categoryId, supplierId, scaleItem });
 
     db.get(
       `
@@ -145,6 +153,8 @@ exports.getItemById = (id) =>
         item_code,
         barcode,
         item_name,
+        scale_item,
+        scale_group_no,
         suppliers_id,
         item_categories_id,
         quantity,
@@ -168,6 +178,51 @@ exports.getItemById = (id) =>
       (err, row) => {
         if (err) return reject(err);
         resolve(row || null);
+      }
+    );
+  });
+
+exports.listItemsForExport = ({ scaleItem = null, ids = null } = {}) =>
+  new Promise((resolve, reject) => {
+    const where = [];
+    const params = [];
+
+    if (scaleItem === 0 || scaleItem === 1) {
+      where.push('i.scale_item = ?');
+      params.push(scaleItem);
+    }
+
+    const safeIds = Array.isArray(ids)
+      ? ids.map((v) => String(v || '').trim()).filter(Boolean)
+      : [];
+    if (safeIds.length) {
+      where.push(`i.id IN (${safeIds.map(() => '?').join(',')})`);
+      params.push(...safeIds);
+    }
+
+    const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
+
+    db.all(
+      `
+      SELECT
+        i.id,
+        i.item_code,
+        i.item_name,
+        i.item_categories_id,
+        c.categories AS category_name,
+        i.unit_type_id,
+        i.retail_price,
+        i.scale_item,
+        i.scale_group_no
+      FROM items i
+      LEFT JOIN item_categories c ON c.id = i.item_categories_id
+      ${whereClause}
+      ORDER BY i.item_code ASC
+      `,
+      params,
+      (err, rows) => {
+        if (err) return reject(err);
+        resolve(rows || []);
       }
     );
   });

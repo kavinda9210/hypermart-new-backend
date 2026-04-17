@@ -16,6 +16,12 @@ router.post('/', requireAuth, itemController.createItem);
 // GET /api/items
 router.get('/', requireAuth, itemController.listItems);
 
+// Export items as CSV
+// GET /api/items/export?type_filter=scale|normal
+// POST /api/items/export  { type_filter, ids: [] }
+router.get('/export', requireAuth, itemController.exportItems);
+router.post('/export', requireAuth, itemController.exportItems);
+
 // GET /api/items/:id
 router.get('/:id', requireAuth, itemController.getItem);
 
