@@ -1,3 +1,16 @@
+// Update only the status_id of an item
+exports.updateItemStatus = (id, status_id) =>
+  new Promise((resolve, reject) => {
+    const now = new Date().toISOString();
+    db.run(
+      `UPDATE items SET status_id = ?, updated_at = ? WHERE id = ?`,
+      [status_id, now, id],
+      function (err) {
+        if (err) return reject(err);
+        resolve({ changes: this.changes, updated_at: now });
+      }
+    );
+  });
 /*
  * models/itemModel.js
  * Data-access layer for items table.

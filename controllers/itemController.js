@@ -1,3 +1,30 @@
+// PATCH /api/items/:id/status
+exports.updateItemStatus = async (req, res) => {
+  const id = String(req.params?.id || '').trim();
+  if (!id) return res.status(400).json({ error: 'Invalid item id.' });
+
+  // Accept status from body: { status: 'out_of_stock' }
+  const status = String(req.body?.status || '').trim().toLowerCase();
+  let status_id = null;
+  if (status === 'out_of_stock') {
+    status_id = 0; // 0 = Out of Stock (adjust as per your DB convention)
+  } else if (status === 'in_stock') {
+    status_id = 1; // 1 = In Stock
+  } else {
+    return res.status(400).json({ error: 'Invalid status value.' });
+  }
+
+  try {
+    const existing = await itemModel.getItemById(id);
+    if (!existing) return res.status(404).json({ error: 'Item not found.' });
+
+    await itemModel.updateItemStatus(id, status_id);
+    const updated = await itemModel.getItemById(id);
+    return res.json({ item: updated });
+  } catch (err) {
+    return res.status(500).json({ error: 'Server error.' });
+  }
+};
 /*
  * controllers/itemController.js
  * Item endpoints.

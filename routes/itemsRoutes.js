@@ -19,7 +19,11 @@ router.get('/', requireAuth, itemController.listItems);
 // GET /api/items/:id
 router.get('/:id', requireAuth, itemController.getItem);
 
+
 // PUT /api/items/:id
 router.put('/:id', requireAuth, itemController.updateItem);
+
+// PATCH /api/items/:id/status
+router.patch('/:id/status', requireAuth, itemController.updateItemStatus);
 
 module.exports = router;
