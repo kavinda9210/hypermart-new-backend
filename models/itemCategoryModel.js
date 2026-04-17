@@ -33,6 +33,18 @@ exports.getCategoryByName = (name) =>
     );
   });
 
+exports.getCategoryById = (id) =>
+  new Promise((resolve, reject) => {
+    db.get(
+      'SELECT id, categories, description, created_at, updated_at FROM item_categories WHERE id = ?',
+      [id],
+      (err, row) => {
+        if (err) return reject(err);
+        resolve(row || null);
+      }
+    );
+  });
+
 exports.createCategory = ({ categories, description }) =>
   new Promise((resolve, reject) => {
     const now = new Date().toISOString();
@@ -56,6 +68,24 @@ exports.createCategory = ({ categories, description }) =>
           created_at: now,
           updated_at: now,
         });
+      }
+    );
+  });
+
+exports.updateCategory = (id, { categories, description }) =>
+  new Promise((resolve, reject) => {
+    const now = new Date().toISOString();
+
+    db.run(
+      `
+      UPDATE item_categories
+      SET categories = ?, description = ?, updated_at = ?
+      WHERE id = ?
+      `,
+      [categories, description, now, id],
+      function (err) {
+        if (err) return reject(err);
+        resolve(this.changes || 0);
       }
     );
   });
