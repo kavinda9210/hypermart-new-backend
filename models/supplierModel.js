@@ -21,6 +21,127 @@ exports.getSupplierByNameAndContact = (supplierName, contactNumber) =>
     );
   });
 
+exports.listSuppliers = ({ searchTerm = '', limit = 30, offset = 0 }) =>
+  new Promise((resolve, reject) => {
+    const safeLimit = Number.isInteger(limit) && limit > 0 ? limit : 30;
+    const safeOffset = Number.isInteger(offset) && offset >= 0 ? offset : 0;
+    const normalized = String(searchTerm || '').trim();
+
+    const whereClause = normalized ? 'WHERE LOWER(supplier_name) LIKE LOWER(?)' : '';
+    const params = normalized ? [`%${normalized}%`, safeLimit, safeOffset] : [safeLimit, safeOffset];
+
+    db.all(
+      `
+      SELECT
+        id,
+        supplier_name,
+        contact_number,
+        email,
+        address,
+        city_id,
+        city_name,
+        vat_no,
+        opening_balance,
+        current_balance,
+        status_id,
+        created_at,
+        updated_at
+      FROM suppliers
+      ${whereClause}
+      ORDER BY id DESC
+      LIMIT ? OFFSET ?
+      `,
+      params,
+      (err, rows) => {
+        if (err) return reject(err);
+        resolve(rows || []);
+      }
+    );
+  });
+
+exports.getSupplierById = (id) =>
+  new Promise((resolve, reject) => {
+    db.get(
+      `
+      SELECT
+        id,
+        supplier_name,
+        contact_number,
+        email,
+        address,
+        city_id,
+        city_name,
+        vat_no,
+        opening_balance,
+        current_balance,
+        status_id,
+        created_at,
+        updated_at
+      FROM suppliers
+      WHERE id = ?
+      `,
+      [id],
+      (err, row) => {
+        if (err) return reject(err);
+        resolve(row || null);
+      }
+    );
+  });
+
+exports.updateSupplier = (id, payload) =>
+  new Promise((resolve, reject) => {
+    const now = new Date().toISOString();
+
+    db.run(
+      `
+      UPDATE suppliers
+      SET
+        supplier_name = ?,
+        contact_number = ?,
+        email = ?,
+        vat_no = ?,
+        address = ?,
+        city_id = ?,
+        city_name = ?,
+        updated_at = ?
+      WHERE id = ?
+      `,
+      [
+        payload.supplier_name,
+        payload.contact_number,
+        payload.email ?? null,
+        payload.vat_no ?? null,
+        payload.address ?? null,
+        payload.city_id ?? null,
+        payload.city_name ?? null,
+        now,
+        id,
+      ],
+      function (err) {
+        if (err) return reject(err);
+        resolve({ changes: this.changes, updated_at: now });
+      }
+    );
+  });
+
+exports.updateSupplierStatus = (id, statusId) =>
+  new Promise((resolve, reject) => {
+    const now = new Date().toISOString();
+
+    db.run(
+      `
+      UPDATE suppliers
+      SET status_id = ?, updated_at = ?
+      WHERE id = ?
+      `,
+      [statusId, now, id],
+      function (err) {
+        if (err) return reject(err);
+        resolve({ changes: this.changes, updated_at: now });
+      }
+    );
+  });
+
 exports.createSupplier = (payload) =>
   new Promise((resolve, reject) => {
     const now = new Date().toISOString();
