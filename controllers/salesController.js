@@ -1,3 +1,46 @@
+// GET /api/sales/:saleId/details
+// Returns: sale info, customer, latest payment, and all items for the sale
+exports.getSaleDetails = (req, res) => {
+  const saleId = req.params.saleId;
+  if (!saleId) return res.status(400).json({ error: 'Missing saleId' });
+
+  // Get sale, customer, user, latest payment
+  const saleSql = `
+    SELECT s.id as sale_id, s.sales_code, s.created_at, c.customer_name, c.contact_number, u.name as sales_person
+    FROM sales s
+    LEFT JOIN customers c ON c.id = s.customers_id
+    LEFT JOIN users u ON u.id = s.users_id
+    WHERE s.id = ?
+  `;
+  // Get latest payment for this sale
+  const paymentSql = `
+    SELECT * FROM payments WHERE sales_id = ? ORDER BY datetime(created_at) DESC LIMIT 1
+  `;
+  // Get all items for this sale
+  const itemsSql = `
+    SELECT si.id as sales_item_id, i.item_name, si.quantity, si.price, si.return_quantity, si.status
+    FROM sales_items si
+    LEFT JOIN items i ON i.id = si.items_id
+    WHERE si.sales_id = ?
+  `;
+
+  const db = require('../config/db');
+  db.get(saleSql, [saleId], (err, saleRow) => {
+    if (err) return res.status(500).json({ error: 'Database error (sale).' });
+    if (!saleRow) return res.status(404).json({ error: 'Sale not found.' });
+    db.get(paymentSql, [saleId], (err2, paymentRow) => {
+      if (err2) return res.status(500).json({ error: 'Database error (payment).' });
+      db.all(itemsSql, [saleId], (err3, itemsRows) => {
+        if (err3) return res.status(500).json({ error: 'Database error (items).' });
+        res.json({
+          sale: saleRow,
+          payment: paymentRow || {},
+          items: itemsRows || []
+        });
+      });
+    });
+  });
+};
 // GET /api/sales/due-amount
 // Returns: invoice (sales_code), customer, phone, item, invoiceAmount, receivedAmount, due, createdBy, date
 exports.listDueAmounts = (req, res) => {
