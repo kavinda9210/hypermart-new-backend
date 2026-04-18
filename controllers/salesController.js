@@ -1,3 +1,44 @@
+// GET /api/sales/due-amount
+// Returns: invoice (sales_code), customer, phone, item, invoiceAmount, receivedAmount, due, createdBy, date
+exports.listDueAmounts = (req, res) => {
+  // Filters (optional, not implemented yet)
+  // const { fromDate, toDate, customer, customerId, phone, itemCode, createdBy } = req.query;
+
+  // For each sale, get latest payment (for due/received), customer, item, user
+  const sql = `
+    SELECT
+      s.sales_code AS invoice,
+      c.customer_name AS customer,
+      c.contact_number AS phone,
+      i.item_name AS item,
+      p.grand_total AS invoiceAmount,
+      p.received_amount AS receivedAmount,
+      p.due_amount AS due,
+      u.name AS createdBy,
+      s.created_at AS date
+    FROM sales s
+    LEFT JOIN customers c ON c.id = s.customers_id
+    LEFT JOIN (
+      SELECT p1.* FROM payments p1
+      INNER JOIN (
+        SELECT sales_id, MAX(datetime(created_at)) AS max_created
+        FROM payments
+        GROUP BY sales_id
+      ) p2 ON p1.sales_id = p2.sales_id AND datetime(p1.created_at) = p2.max_created
+    ) p ON p.sales_id = s.id
+    LEFT JOIN sales_items si ON si.sales_id = s.id
+    LEFT JOIN items i ON i.id = si.items_id
+    LEFT JOIN users u ON u.id = s.users_id
+    WHERE p.due_amount IS NOT NULL AND p.due_amount > 0
+    GROUP BY s.id, si.id
+    ORDER BY datetime(s.created_at) DESC
+    LIMIT 100
+  `;
+  db.all(sql, [], (err, rows) => {
+    if (err) return res.status(500).json({ error: 'Database error.' });
+    res.json({ dueAmounts: rows || [] });
+  });
+};
 const db = require('../config/db');
 
 const toInt = (v, fallback) => {
@@ -23,26 +64,24 @@ exports.listSales = (req, res) => {
 
   let sql = `
     SELECT
-      s.id,
+      s.id AS sale_id,
       s.sales_code,
       s.created_at,
       c.customer_name,
       c.contact_number,
-      p.grand_total AS total,
-      p.received_amount,
-      p.paid_amount,
-      p.payment_status AS status,
-      p.due_amount,
-      p.discount
+      si.id AS sales_item_id,
+      i.item_code,
+      i.item_name,
+      ic.categories AS category,
+      si.quantity,
+      si.price,
+      si.discount,
+      si.status
     FROM sales s
     LEFT JOIN customers c ON c.id = s.customers_id
-    LEFT JOIN payments p ON p.id = (
-      SELECT p2.id
-      FROM payments p2
-      WHERE p2.sales_id = s.id
-      ORDER BY datetime(p2.created_at) DESC
-      LIMIT 1
-    )
+    LEFT JOIN sales_items si ON si.sales_id = s.id
+    LEFT JOIN items i ON i.id = si.items_id
+    LEFT JOIN item_categories ic ON ic.id = i.item_categories_id
     WHERE 1=1
   `;
   const params = [];
@@ -62,15 +101,7 @@ exports.listSales = (req, res) => {
 
   // Filter by category if any item in the sale belongs to that category
   if (category_id && String(category_id).trim()) {
-    sql += `
-      AND EXISTS (
-        SELECT 1
-        FROM sales_items si
-        JOIN items i ON i.id = si.items_id
-        WHERE si.sales_id = s.id
-          AND i.item_categories_id = ?
-      )
-    `;
+    sql += ` AND i.item_categories_id = ?`;
     params.push(String(category_id).trim());
   }
 

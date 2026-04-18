@@ -9,4 +9,7 @@ router.get('/', requireAuth, salesController.listSales);
 // GET /api/sales/returns
 router.get('/returns', requireAuth, salesController.listSalesReturns);
 
+// GET /api/sales/due-amount
+router.get('/due-amount', requireAuth, salesController.listDueAmounts);
+
 module.exports = router;
