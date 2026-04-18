@@ -51,7 +51,7 @@ exports.login = async (req, res) => {
     const token = jwt.sign(
       { id: user.id, role: role ? role.role_name : null },
       SECRET,
-      { expiresIn: '1d' }
+      { expiresIn: '10h' }
     );
 
     // Send token + user payload back to client.

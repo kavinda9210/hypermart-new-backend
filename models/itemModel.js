@@ -368,3 +368,49 @@ exports.updateItemQuantity = (id, quantity) =>
       }
     );
   });
+
+exports.updateItemPricingAndExpiry = (id, payload) =>
+  new Promise((resolve, reject) => {
+    const now = new Date().toISOString();
+
+    const set = [];
+    const params = [];
+
+    if (payload && Object.prototype.hasOwnProperty.call(payload, 'purchase_price')) {
+      set.push('purchase_price = ?');
+      params.push(payload.purchase_price ?? null);
+    }
+    if (payload && Object.prototype.hasOwnProperty.call(payload, 'retail_price')) {
+      set.push('retail_price = ?');
+      params.push(payload.retail_price ?? null);
+    }
+    if (payload && Object.prototype.hasOwnProperty.call(payload, 'wholesale_price')) {
+      set.push('wholesale_price = ?');
+      params.push(payload.wholesale_price ?? null);
+    }
+    if (payload && Object.prototype.hasOwnProperty.call(payload, 'has_expiry_date')) {
+      set.push('has_expiry_date = ?');
+      params.push(payload.has_expiry_date ? 1 : 0);
+    }
+    if (payload && Object.prototype.hasOwnProperty.call(payload, 'show_expiry_alert_in')) {
+      set.push('show_expiry_alert_in = ?');
+      params.push(payload.show_expiry_alert_in ?? null);
+    }
+
+    if (!set.length) {
+      return resolve({ changes: 0, updated_at: now });
+    }
+
+    set.push('updated_at = ?');
+    params.push(now);
+    params.push(id);
+
+    db.run(
+      `UPDATE items SET ${set.join(', ')} WHERE id = ?`,
+      params,
+      function (err) {
+        if (err) return reject(err);
+        resolve({ changes: this.changes, updated_at: now });
+      }
+    );
+  });
