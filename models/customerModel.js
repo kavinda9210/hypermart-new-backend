@@ -1,3 +1,20 @@
+/**
+ * List all customers (basic info for list page)
+ * @returns {Promise<Array>}
+ */
+exports.listCustomers = () =>
+  new Promise((resolve, reject) => {
+    db.all(
+      `SELECT id, customer_code, customer_name, contact_number, address_line_1, address_line_2, email, due_amount, user_id, city_name, status_id
+       FROM customers
+       ORDER BY created_at DESC`,
+      [],
+      (err, rows) => {
+        if (err) return reject(err);
+        resolve(rows || []);
+      }
+    );
+  });
 // backend/models/customerModel.js
 const db = require('../config/db');
 

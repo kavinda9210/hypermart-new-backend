@@ -1,3 +1,16 @@
+/**
+ * GET /api/customers
+ * List all customers (for customer list page)
+ */
+exports.listCustomers = async (req, res) => {
+  try {
+    const customers = await customerModel.listCustomers();
+    return res.json({ success: true, customers });
+  } catch (err) {
+    console.error('[ListCustomers] Error:', err);
+    return res.status(500).json({ error: 'Server error.' });
+  }
+};
 // backend/controllers/customerController.js
 const customerModel = require('../models/customerModel');
 
