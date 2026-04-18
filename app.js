@@ -20,9 +20,11 @@ const usersRoutes = require('./routes/usersRoutes');
 const itemCategoriesRoutes = require('./routes/itemCategoriesRoutes');
 const suppliersRoutes = require('./routes/suppliersRoutes');
 const itemsRoutes = require('./routes/itemsRoutes');
+
 const uploadRoutes = require('./routes/uploadRoutes');
 const stockRoutes = require('./routes/stockRoutes');
 const salesRoutes = require('./routes/salesRoutes');
+const customersRoutes = require('./routes/customersRoutes');
 
 // Create the Express application instance.
 const app = express();
@@ -63,6 +65,8 @@ app.use('/api/suppliers', suppliersRoutes);
 app.use('/api/items', itemsRoutes);
 app.use('/api/upload', uploadRoutes);
 
+
+app.use('/api/customers', customersRoutes);
 app.use('/api/stock', stockRoutes);
 app.use('/api/sales', salesRoutes);
 

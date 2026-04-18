@@ -1,3 +1,9 @@
+/**
+ * Require a single permission (case-insensitive name).
+ * @param {string} permissionName
+ */
+exports.requirePermission = (permissionName) =>
+  exports.requireAllPermissions([permissionName]);
 /*
  * middleware/permissionMiddleware.js
  * Permission guard middleware using roles_has_permissions.
@@ -12,7 +18,12 @@ const getUserPermissionSet = async (userId) => {
   return new Set((perms || []).map((p) => toKey(p.permissions_name)));
 };
 
-const deny = (res) => res.status(403).json({ error: 'Forbidden' });
+const deny = (res, reason) => {
+  if (reason) {
+    console.log('[PermissionMiddleware] Deny reason:', reason);
+  }
+  return res.status(403).json({ error: 'Forbidden' });
+};
 
 /**
  * Require ALL permissions (case-insensitive names).
@@ -23,12 +34,19 @@ exports.requireAllPermissions = (permissionNames) => async (req, res, next) => {
   if (names.length === 0) return next();
 
   try {
-    const set = await getUserPermissionSet(req.user?.id);
+    const userId = req.user?.id;
+    if (!userId) {
+      console.log('[PermissionMiddleware] No userId in req.user:', req.user);
+      return deny(res, 'No userId in req.user');
+    }
+    const set = await getUserPermissionSet(userId);
+    console.log('[PermissionMiddleware] userId:', userId, 'required:', names, 'userPerms:', Array.from(set));
     const ok = names.every((n) => set.has(toKey(n)));
-    if (!ok) return deny(res);
+    if (!ok) return deny(res, 'Missing required permission');
     return next();
-  } catch {
-    return deny(res);
+  } catch (e) {
+    console.log('[PermissionMiddleware] Error:', e);
+    return deny(res, 'Exception in permission check');
   }
 };
 
@@ -41,11 +59,18 @@ exports.requireAnyPermissions = (permissionNames) => async (req, res, next) => {
   if (names.length === 0) return next();
 
   try {
-    const set = await getUserPermissionSet(req.user?.id);
+    const userId = req.user?.id;
+    if (!userId) {
+      console.log('[PermissionMiddleware] No userId in req.user:', req.user);
+      return deny(res, 'No userId in req.user');
+    }
+    const set = await getUserPermissionSet(userId);
+    console.log('[PermissionMiddleware] userId:', userId, 'requiredAny:', names, 'userPerms:', Array.from(set));
     const ok = names.some((n) => set.has(toKey(n)));
-    if (!ok) return deny(res);
+    if (!ok) return deny(res, 'Missing any required permission');
     return next();
-  } catch {
-    return deny(res);
+  } catch (e) {
+    console.log('[PermissionMiddleware] Error:', e);
+    return deny(res, 'Exception in permission check');
   }
 };
