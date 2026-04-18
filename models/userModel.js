@@ -259,6 +259,85 @@ exports.listPermissions = () =>
   });
 
 /**
+ * Get a single permission by id.
+ * @param {number|string} id
+ * @returns {Promise<{id:number, permissions_name:string}|null>}
+ */
+exports.getPermissionById = (id) =>
+  new Promise((resolve, reject) => {
+    db.get(
+      'SELECT id, permissions_name FROM permissions WHERE id = ?',
+      [id],
+      (err, row) => {
+        if (err) return reject(err);
+        resolve(row || null);
+      }
+    );
+  });
+
+/**
+ * Find a permission by name (case-insensitive).
+ * @param {string} name
+ * @returns {Promise<{id:number, permissions_name:string}|null>}
+ */
+exports.getPermissionByNameCI = (name) =>
+  new Promise((resolve, reject) => {
+    db.get(
+      'SELECT id, permissions_name FROM permissions WHERE LOWER(permissions_name) = LOWER(?)',
+      [name],
+      (err, row) => {
+        if (err) return reject(err);
+        resolve(row || null);
+      }
+    );
+  });
+
+/**
+ * Create a new permission.
+ * @param {string} permissionsName
+ * @returns {Promise<{id:number, permissions_name:string}>}
+ */
+exports.createPermission = async (permissionsName) => {
+  const now = new Date().toISOString();
+  const name = String(permissionsName || '').trim();
+
+  await new Promise((resolve, reject) => {
+    db.run(
+      'INSERT INTO permissions (permissions_name, created_at, updated_at) VALUES (?, ?, ?)',
+      [name, now, now],
+      (err) => {
+        if (err) return reject(err);
+        resolve();
+      }
+    );
+  });
+
+  const created = await exports.getPermissionByNameCI(name);
+  if (!created) throw new Error('Failed to create permission');
+  return created;
+};
+
+/**
+ * Update permission name.
+ * @param {number|string} id
+ * @param {string} permissionsName
+ * @returns {Promise<boolean>} true if updated
+ */
+exports.updatePermissionName = (id, permissionsName) =>
+  new Promise((resolve, reject) => {
+    const now = new Date().toISOString();
+    const name = String(permissionsName || '').trim();
+    db.run(
+      'UPDATE permissions SET permissions_name = ?, updated_at = ? WHERE id = ?',
+      [name, now, id],
+      function (err) {
+        if (err) return reject(err);
+        resolve(this.changes > 0);
+      }
+    );
+  });
+
+/**
  * Ensure the given permission names exist in the permissions table and return their ids.
  * Inserts missing permission rows.
  * @param {string[]} permissionNames

@@ -38,6 +38,33 @@ router.post('/roles', requireAuth, requireAllPermissions(['Access_Users', 'Add N
 // Returns all available permissions (requires a valid JWT).
 router.get('/permissions', requireAuth, requireAllPermissions(['Access_Users', 'Permission List View']), userController.listPermissions);
 
+// POST /api/users/permissions
+// Creates a new permission (requires a valid JWT).
+router.post(
+	'/permissions',
+	requireAuth,
+	requireAllPermissions(['Access_Users', 'Add New Permission']),
+	userController.createPermission
+);
+
+// GET /api/users/permissions/:id
+// Returns a single permission (requires a valid JWT).
+router.get(
+	'/permissions/:id',
+	requireAuth,
+	requireAllPermissions(['Access_Users', 'Permission List View']),
+	userController.getPermission
+);
+
+// PUT /api/users/permissions/:id
+// Updates a single permission (requires a valid JWT).
+router.put(
+	'/permissions/:id',
+	requireAuth,
+	requireAllPermissions(['Access_Users', 'Permission Update']),
+	userController.updatePermission
+);
+
 // GET /api/users/roles/:id/permissions
 // Returns permission ids for a role (requires a valid JWT).
 router.get('/roles/:id/permissions', requireAuth, requireAllPermissions(['Access_Users', 'Role Update']), userController.getRolePermissions);

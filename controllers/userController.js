@@ -324,6 +324,90 @@ exports.listPermissions = async (req, res) => {
 };
 
 /**
+ * POST /api/users/permissions
+ * Create a new permission.
+ * Body: { permissions_name: string } (also accepts { permission: string })
+ */
+exports.createPermission = async (req, res) => {
+  const rawName =
+    req.body?.permissions_name !== undefined
+      ? req.body.permissions_name
+      : req.body?.permission;
+
+  const permissions_name = String(rawName || '').trim();
+  if (!permissions_name) {
+    return res.status(400).json({ error: 'permissions_name is required.' });
+  }
+
+  try {
+    const existing = await userModel.getPermissionByNameCI(permissions_name);
+    if (existing) return res.status(409).json({ error: 'Permission already exists.' });
+
+    const created = await userModel.createPermission(permissions_name);
+    return res.status(201).json({ permission: created });
+  } catch {
+    return res.status(500).json({ error: 'Server error.' });
+  }
+};
+
+/**
+ * GET /api/users/permissions/:id
+ * Get a single permission.
+ */
+exports.getPermission = async (req, res) => {
+  const { id } = req.params;
+  const idNum = Number(id);
+  if (!Number.isFinite(idNum)) return res.status(400).json({ error: 'Invalid permission id.' });
+
+  try {
+    const permission = await userModel.getPermissionById(idNum);
+    if (!permission) return res.status(404).json({ error: 'Permission not found.' });
+    return res.json({ permission });
+  } catch {
+    return res.status(500).json({ error: 'Server error.' });
+  }
+};
+
+/**
+ * PUT /api/users/permissions/:id
+ * Update permission name.
+ * Body: { permissions_name: string } (also accepts { permission: string })
+ */
+exports.updatePermission = async (req, res) => {
+  const { id } = req.params;
+  const idNum = Number(id);
+  if (!Number.isFinite(idNum)) return res.status(400).json({ error: 'Invalid permission id.' });
+
+  const rawName =
+    req.body?.permissions_name !== undefined
+      ? req.body.permissions_name
+      : req.body?.permission;
+
+  const permissions_name = String(rawName || '').trim();
+  if (!permissions_name) {
+    return res.status(400).json({ error: 'permissions_name is required.' });
+  }
+
+  try {
+    const existing = await userModel.getPermissionById(idNum);
+    if (!existing) return res.status(404).json({ error: 'Permission not found.' });
+
+    const conflict = await userModel.getPermissionByNameCI(permissions_name);
+    if (conflict && Number(conflict.id) !== idNum) {
+      return res.status(409).json({ error: 'Permission already exists.' });
+    }
+
+    const updatedOk = await userModel.updatePermissionName(idNum, permissions_name);
+    if (!updatedOk) return res.status(404).json({ error: 'Permission not found.' });
+
+    const updated = await userModel.getPermissionById(idNum);
+    return res.json({ success: true, permission: updated });
+  } catch {
+    return res.status(500).json({ error: 'Server error.' });
+  }
+};
+
+/**
  * GET /api/users/roles/:id/permissions
  * Returns permission ids assigned to the role.
  */
