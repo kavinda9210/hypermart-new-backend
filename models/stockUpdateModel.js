@@ -52,6 +52,134 @@ exports.listByItemId = (itemId) =>
     );
   });
 
+exports.getById = (id) =>
+  new Promise((resolve, reject) => {
+    const safeId = Number(id);
+    if (!Number.isInteger(safeId) || safeId <= 0) return resolve(null);
+
+    db.get(
+      `
+      SELECT
+        id,
+        user_id,
+        items_id,
+        batch_no,
+        supplier_id,
+        stock,
+        remaining_stock,
+        purchase_price,
+        retail_price,
+        wholesale_price,
+        market_price,
+        additional_fees_percentage,
+        additional_fees_amount,
+        received_at,
+        status,
+        note,
+        supplier_invoice_id,
+        invoice_ref,
+        exp_date,
+        show_expiry_alert_in,
+        created_at,
+        updated_at
+      FROM stock_updates
+      WHERE id = ?
+      `,
+      [safeId],
+      (err, row) => {
+        if (err) return reject(err);
+        resolve(row || null);
+      }
+    );
+  });
+
+exports.updateRemainingStock = (id, remainingStock) =>
+  new Promise((resolve, reject) => {
+    const now = new Date().toISOString();
+    const safeId = Number(id);
+    const remaining = Number(remainingStock);
+
+    if (!Number.isInteger(safeId) || safeId <= 0) {
+      return reject(new Error('Invalid stock update id'));
+    }
+    if (!Number.isFinite(remaining) || remaining < 0) {
+      return reject(new Error('Invalid remaining stock'));
+    }
+
+    db.run(
+      `UPDATE stock_updates SET remaining_stock = ?, updated_at = ? WHERE id = ?`,
+      [remaining, now, safeId],
+      function (err) {
+        if (err) return reject(err);
+        resolve({ changes: this.changes, updated_at: now });
+      }
+    );
+  });
+
+exports.getById = (id) =>
+  new Promise((resolve, reject) => {
+    const safeId = Number(id);
+    if (!Number.isInteger(safeId) || safeId <= 0) return resolve(null);
+
+    db.get(
+      `
+      SELECT
+        id,
+        user_id,
+        items_id,
+        batch_no,
+        supplier_id,
+        stock,
+        remaining_stock,
+        purchase_price,
+        retail_price,
+        wholesale_price,
+        market_price,
+        additional_fees_percentage,
+        additional_fees_amount,
+        received_at,
+        status,
+        note,
+        supplier_invoice_id,
+        invoice_ref,
+        exp_date,
+        show_expiry_alert_in,
+        created_at,
+        updated_at
+      FROM stock_updates
+      WHERE id = ?
+      `,
+      [safeId],
+      (err, row) => {
+        if (err) return reject(err);
+        resolve(row || null);
+      }
+    );
+  });
+
+exports.updateRemainingStock = (id, remainingStock) =>
+  new Promise((resolve, reject) => {
+    const now = new Date().toISOString();
+    const safeId = Number(id);
+    const remaining = Number(remainingStock);
+
+    if (!Number.isInteger(safeId) || safeId <= 0) {
+      return reject(new Error('Invalid stock update id'));
+    }
+    if (!Number.isFinite(remaining) || remaining < 0) {
+      return reject(new Error('Invalid remaining stock'));
+    }
+
+    db.run(
+      `UPDATE stock_updates SET remaining_stock = ?, updated_at = ? WHERE id = ?`,
+      [remaining, now, safeId],
+      function (err) {
+        if (err) return reject(err);
+        resolve({ changes: this.changes, updated_at: now });
+      }
+    );
+  });
+
 exports.create = (payload) =>
   new Promise((resolve, reject) => {
     const now = new Date().toISOString();

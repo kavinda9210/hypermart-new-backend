@@ -18,6 +18,9 @@ router.get('/:id/updates', requireAuth, stockController.listStockUpdatesForItem)
 // POST /api/stock/:id/updates
 router.post('/:id/updates', requireAuth, stockController.createStockUpdate);
 
+// POST /api/stock/:itemId/updates/:updateId/remove
+router.post('/:itemId/updates/:updateId/remove', requireAuth, stockController.removeStockFromBatch);
+
 // PATCH /api/stock/:id
 router.patch('/:id', requireAuth, stockController.updateStock);
 

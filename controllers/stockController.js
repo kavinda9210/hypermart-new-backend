@@ -5,6 +5,7 @@
 
 const itemModel = require('../models/itemModel');
 const stockUpdateModel = require('../models/stockUpdateModel');
+const stockRemovalModel = require('../models/stockRemovalModel');
 
 exports.listStock = async (req, res) => {
   const search = String(req.query?.search || '').trim();
@@ -170,6 +171,82 @@ exports.createStockUpdate = async (req, res) => {
 
     const updatedItem = await itemModel.getItemById(id);
     return res.status(201).json({ stock_update: { id: created.id }, item: updatedItem });
+  } catch {
+    return res.status(500).json({ error: 'Server error.' });
+  }
+};
+
+// POST /api/stock/:itemId/updates/:updateId/remove
+// Body: { quantity_removed, removal_reason, notes?, removed_at? }
+exports.removeStockFromBatch = async (req, res) => {
+  const itemId = String(req.params?.itemId || '').trim();
+  const updateIdRaw = req.params?.updateId;
+  const updateId = Number(updateIdRaw);
+
+  if (!itemId) return res.status(400).json({ error: 'Invalid item id.' });
+  if (!Number.isInteger(updateId) || updateId <= 0) return res.status(400).json({ error: 'Invalid stock update id.' });
+
+  const qtyRaw = Number(req.body?.quantity_removed);
+  if (!Number.isFinite(qtyRaw) || qtyRaw <= 0) {
+    return res.status(400).json({ error: 'quantity_removed must be a positive number.' });
+  }
+
+  const qty = Math.floor(qtyRaw);
+  if (qty <= 0) return res.status(400).json({ error: 'quantity_removed must be at least 1.' });
+
+  const reason = String(req.body?.removal_reason || '').trim();
+  if (!reason) return res.status(400).json({ error: 'removal_reason is required.' });
+  const allowedReasons = new Set(['expired', 'damaged', 'lost', 'other']);
+  if (!allowedReasons.has(reason)) {
+    return res.status(400).json({ error: 'Invalid removal_reason.' });
+  }
+
+  const notes = req.body?.notes === undefined || req.body?.notes === null || String(req.body.notes).trim() === ''
+    ? null
+    : String(req.body.notes).trim();
+
+  const removedAt = req.body?.removed_at === undefined || req.body?.removed_at === null || String(req.body.removed_at).trim() === ''
+    ? new Date().toISOString()
+    : String(req.body.removed_at).trim();
+
+  try {
+    const existingItem = await itemModel.getItemById(itemId);
+    if (!existingItem) return res.status(404).json({ error: 'Item not found.' });
+
+    const stockUpdate = await stockUpdateModel.getById(updateId);
+    if (!stockUpdate) return res.status(404).json({ error: 'Stock batch not found.' });
+    if (String(stockUpdate.items_id) !== String(itemId)) {
+      return res.status(400).json({ error: 'Stock batch does not belong to this item.' });
+    }
+
+    const remaining = Number(stockUpdate.remaining_stock ?? 0);
+    if (!Number.isFinite(remaining) || remaining < 0) {
+      return res.status(400).json({ error: 'Invalid batch remaining stock.' });
+    }
+    if (qty > remaining) {
+      return res.status(400).json({ error: 'Cannot remove more than remaining stock.' });
+    }
+
+    const nextRemaining = remaining - qty;
+    await stockUpdateModel.updateRemainingStock(updateId, nextRemaining);
+
+    const currentItemQty = Number(existingItem.quantity ?? 0);
+    const nextItemQty = Math.max(0, Math.floor(currentItemQty - qty));
+    await itemModel.updateItemQuantity(itemId, nextItemQty);
+
+    await stockRemovalModel.create({
+      stock_update_id: updateId,
+      items_id: itemId,
+      user_id: req.user?.id ?? '0',
+      quantity_removed: qty,
+      removal_reason: reason,
+      notes,
+      removed_at: removedAt,
+    });
+
+    const updatedItem = await itemModel.getItemById(itemId);
+    const updatedBatch = await stockUpdateModel.getById(updateId);
+    return res.status(201).json({ item: updatedItem, stock_update: updatedBatch });
   } catch {
     return res.status(500).json({ error: 'Server error.' });
   }
