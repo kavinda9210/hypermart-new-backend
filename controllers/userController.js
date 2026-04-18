@@ -14,7 +14,41 @@ exports.createRole = async (req, res) => {
       return res.status(409).json({ error: 'Role name already exists.' });
     }
     const created = await userModel.createRole({ role_name: role_name.trim() });
-    return res.status(201).json({ role: created });
+
+    // Default permissions for any newly created role.
+    const DEFAULT_PERMISSION_NAMES = [
+      'dashboards',
+      'Access_Dashbord',
+      'Access_Billing',
+      'Access_Items',
+      'Access_Stock',
+      'Access_Sales',
+      'Access_Users',
+      'Access_Customers',
+      'Access_Suppliers',
+      'Access_Expenses',
+      'Access_Finance',
+      'Access_Reports',
+      'Access_Settings',
+      'Add new Item',
+      'Add New User',
+      'Add New Role',
+      'Add New Permission',
+      'User List View',
+      'Role List View',
+      'Permission List View',
+      'User Status Control',
+      'User Update',
+      'Role Update',
+      'Permission Update',
+      'Add New Customers',
+      'View Customer List',
+    ];
+
+    const defaultIds = await userModel.ensurePermissionIdsByNames(DEFAULT_PERMISSION_NAMES);
+    await userModel.addMissingRolePermissions(created.id, defaultIds);
+
+    return res.status(201).json({ role: created, default_permission_ids: defaultIds });
   } catch {
     return res.status(500).json({ error: 'Server error.' });
   }
@@ -271,6 +305,107 @@ exports.listBranches = async (req, res) => {
   try {
     const branches = await userModel.listBranches();
     return res.json({ branches });
+  } catch {
+    return res.status(500).json({ error: 'Server error.' });
+  }
+};
+
+/**
+ * GET /api/users/permissions
+ * Returns all available permissions.
+ */
+exports.listPermissions = async (req, res) => {
+  try {
+    const permissions = await userModel.listPermissions();
+    return res.json({ permissions });
+  } catch {
+    return res.status(500).json({ error: 'Server error.' });
+  }
+};
+
+/**
+ * GET /api/users/roles/:id/permissions
+ * Returns permission ids assigned to the role.
+ */
+exports.getRolePermissions = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const role = await userModel.getRoleById(id);
+    if (!role) return res.status(404).json({ error: 'Role not found.' });
+
+    const permission_ids = await userModel.getRolePermissionIds(id);
+    return res.json({ role, permission_ids });
+  } catch {
+    return res.status(500).json({ error: 'Server error.' });
+  }
+};
+
+/**
+ * PUT /api/users/roles/:id/permissions
+ * Replace role permissions.
+ * Body: { permission_ids: number[] }
+ */
+exports.updateRolePermissions = async (req, res) => {
+  const { id } = req.params;
+
+  const { permission_ids, role_name } = req.body || {};
+  if (permission_ids !== undefined && !Array.isArray(permission_ids)) {
+    return res.status(400).json({ error: 'permission_ids must be an array.' });
+  }
+
+  try {
+    const role = await userModel.getRoleById(id);
+    if (!role) return res.status(404).json({ error: 'Role not found.' });
+
+    if (role_name !== undefined) {
+      const nextName = String(role_name || '').trim();
+      if (!nextName) {
+        return res.status(400).json({ error: 'role_name is required.' });
+      }
+
+      const existingRoles = await userModel.listRoles();
+      const conflict = (existingRoles || []).some(
+        (r) => Number(r.id) !== Number(id) && String(r.role_name || '').toLowerCase() === nextName.toLowerCase()
+      );
+      if (conflict) return res.status(409).json({ error: 'Role name already exists.' });
+
+      await userModel.updateRoleName(id, nextName);
+    }
+
+    const allPerms = await userModel.listPermissions();
+    const allowedIds = new Set((allPerms || []).map((p) => Number(p.id)));
+    const ids = Array.isArray(permission_ids)
+      ? Array.from(
+          new Set(
+            permission_ids
+              .map((n) => Number(n))
+              .filter((n) => Number.isFinite(n) && allowedIds.has(n))
+          )
+        )
+      : [];
+
+    await userModel.replaceRolePermissions(id, ids);
+
+    const updatedPermissionIds = await userModel.getRolePermissionIds(id);
+    const updatedRole = await userModel.getRoleById(id);
+    return res.json({ success: true, role: updatedRole, permission_ids: updatedPermissionIds });
+  } catch {
+    return res.status(500).json({ error: 'Server error.' });
+  }
+};
+
+/**
+ * GET /api/users/me/permissions
+ * Returns permissions for current user (for dashboard/menu visibility).
+ */
+exports.getMyPermissions = async (req, res) => {
+  const userId = String(req.user?.id || '').trim();
+  if (!userId) return res.status(401).json({ error: 'Unauthorized.' });
+
+  try {
+    const permissions = await userModel.listPermissionsForUser(userId);
+    return res.json({ permissions });
   } catch {
     return res.status(500).json({ error: 'Server error.' });
   }

@@ -142,6 +142,26 @@ exports.updateRole = (id, payload) =>
   });
 
 /**
+ * Update role name.
+ * @param {number|string} id
+ * @param {string} roleName
+ * @returns {Promise<number>} number of updated rows
+ */
+exports.updateRoleName = (id, roleName) =>
+  new Promise((resolve, reject) => {
+    const now = new Date().toISOString();
+
+    db.run(
+      'UPDATE roles SET role_name = ?, updated_at = ? WHERE id = ?',
+      [roleName, now, id],
+      function (err) {
+        if (err) return reject(err);
+        resolve(this.changes || 0);
+      }
+    );
+  });
+
+/**
  * Get a user row by id.
  * @param {string} id
  * @returns {Promise<object|null>}
@@ -224,6 +244,253 @@ exports.listBranches = () =>
       if (err) return reject(err);
       resolve(rows || []);
     });
+  });
+
+/**
+ * List all permissions.
+ * @returns {Promise<Array<{id:number, permissions_name:string}>>}
+ */
+exports.listPermissions = () =>
+  new Promise((resolve, reject) => {
+    db.all('SELECT id, permissions_name FROM permissions ORDER BY id', [], (err, rows) => {
+      if (err) return reject(err);
+      resolve(rows || []);
+    });
+  });
+
+/**
+ * Ensure the given permission names exist in the permissions table and return their ids.
+ * Inserts missing permission rows.
+ * @param {string[]} permissionNames
+ * @returns {Promise<number[]>}
+ */
+exports.ensurePermissionIdsByNames = (permissionNames) =>
+  new Promise((resolve, reject) => {
+    const now = new Date().toISOString();
+    const names = Array.isArray(permissionNames)
+      ? Array.from(
+          new Set(
+            permissionNames
+              .map((n) => (typeof n === 'string' ? n.trim() : ''))
+              .filter(Boolean)
+          )
+        )
+      : [];
+
+    if (names.length === 0) return resolve([]);
+
+    const placeholders = names.map(() => '?').join(',');
+    db.serialize(() => {
+      db.run('BEGIN TRANSACTION');
+
+      db.all(
+        `SELECT id, permissions_name FROM permissions WHERE permissions_name IN (${placeholders})`,
+        names,
+        (selErr, rows) => {
+          if (selErr) {
+            db.run('ROLLBACK');
+            return reject(selErr);
+          }
+
+          const existingMap = new Map((rows || []).map((r) => [String(r.permissions_name), Number(r.id)]));
+          const missing = names.filter((n) => !existingMap.has(n));
+
+          if (missing.length === 0) {
+            db.run('COMMIT', (commitErr) => {
+              if (commitErr) return reject(commitErr);
+              resolve(names.map((n) => existingMap.get(n)).filter((id) => Number.isFinite(id)));
+            });
+            return;
+          }
+
+          const stmt = db.prepare(
+            'INSERT INTO permissions (permissions_name, created_at, updated_at) VALUES (?, ?, ?)'
+          );
+
+          for (const n of missing) {
+            stmt.run([n, now, now]);
+          }
+
+          stmt.finalize((insErr) => {
+            if (insErr) {
+              db.run('ROLLBACK');
+              return reject(insErr);
+            }
+
+            db.all(
+              `SELECT id, permissions_name FROM permissions WHERE permissions_name IN (${placeholders})`,
+              names,
+              (sel2Err, rows2) => {
+                if (sel2Err) {
+                  db.run('ROLLBACK');
+                  return reject(sel2Err);
+                }
+
+                const map2 = new Map((rows2 || []).map((r) => [String(r.permissions_name), Number(r.id)]));
+                db.run('COMMIT', (commitErr) => {
+                  if (commitErr) return reject(commitErr);
+                  resolve(names.map((n) => map2.get(n)).filter((id) => Number.isFinite(id)));
+                });
+              }
+            );
+          });
+        }
+      );
+    });
+  });
+
+/**
+ * Add permissions to a role without removing existing ones.
+ * @param {number|string} roleId
+ * @param {number[]} permissionIds
+ * @returns {Promise<number[]>} ids that were newly added
+ */
+exports.addMissingRolePermissions = async (roleId, permissionIds) => {
+  const now = new Date().toISOString();
+  const rolePerms = await exports.getRolePermissionIds(roleId);
+  const existing = new Set(rolePerms.map((n) => Number(n)));
+
+  const ids = Array.isArray(permissionIds)
+    ? Array.from(
+        new Set(
+          permissionIds
+            .map((n) => Number(n))
+            .filter((n) => Number.isFinite(n))
+        )
+      )
+    : [];
+
+  const missing = ids.filter((id) => !existing.has(id));
+  if (missing.length === 0) return [];
+
+  await new Promise((resolve, reject) => {
+    db.serialize(() => {
+      db.run('BEGIN TRANSACTION');
+
+      const stmt = db.prepare(
+        'INSERT INTO roles_has_permissions (roles_id, permissions_id, created_at, updated_at) VALUES (?, ?, ?, ?)'
+      );
+
+      for (const pid of missing) {
+        stmt.run([roleId, pid, now, now]);
+      }
+
+      stmt.finalize((finalizeErr) => {
+        if (finalizeErr) {
+          db.run('ROLLBACK');
+          return reject(finalizeErr);
+        }
+
+        db.run('COMMIT', (commitErr) => {
+          if (commitErr) return reject(commitErr);
+          resolve();
+        });
+      });
+    });
+  });
+
+  return missing;
+};
+
+/**
+ * Get permission ids assigned to a role.
+ * @param {number|string} roleId
+ * @returns {Promise<number[]>}
+ */
+exports.getRolePermissionIds = (roleId) =>
+  new Promise((resolve, reject) => {
+    db.all(
+      'SELECT permissions_id FROM roles_has_permissions WHERE roles_id = ? ORDER BY permissions_id',
+      [roleId],
+      (err, rows) => {
+        if (err) return reject(err);
+        resolve((rows || []).map((r) => Number(r.permissions_id)));
+      }
+    );
+  });
+
+/**
+ * Replace all permissions for a role.
+ * @param {number|string} roleId
+ * @param {number[]} permissionIds
+ * @returns {Promise<void>}
+ */
+exports.replaceRolePermissions = (roleId, permissionIds) =>
+  new Promise((resolve, reject) => {
+    const now = new Date().toISOString();
+    const ids = Array.isArray(permissionIds)
+      ? Array.from(
+          new Set(
+            permissionIds
+              .map((n) => Number(n))
+              .filter((n) => Number.isFinite(n))
+          )
+        )
+      : [];
+
+    db.serialize(() => {
+      db.run('BEGIN TRANSACTION');
+
+      db.run('DELETE FROM roles_has_permissions WHERE roles_id = ?', [roleId], (delErr) => {
+        if (delErr) {
+          db.run('ROLLBACK');
+          return reject(delErr);
+        }
+
+        if (ids.length === 0) {
+          db.run('COMMIT', (commitErr) => {
+            if (commitErr) return reject(commitErr);
+            resolve();
+          });
+          return;
+        }
+
+        const stmt = db.prepare(
+          'INSERT INTO roles_has_permissions (roles_id, permissions_id, created_at, updated_at) VALUES (?, ?, ?, ?)'
+        );
+
+        for (const pid of ids) {
+          stmt.run([roleId, pid, now, now]);
+        }
+
+        stmt.finalize((finalizeErr) => {
+          if (finalizeErr) {
+            db.run('ROLLBACK');
+            return reject(finalizeErr);
+          }
+
+          db.run('COMMIT', (commitErr) => {
+            if (commitErr) return reject(commitErr);
+            resolve();
+          });
+        });
+      });
+    });
+  });
+
+/**
+ * List permissions for a user (via their role).
+ * @param {string} userId
+ * @returns {Promise<Array<{id:number, permissions_name:string}>>}
+ */
+exports.listPermissionsForUser = (userId) =>
+  new Promise((resolve, reject) => {
+    db.all(
+      `
+      SELECT p.id, p.permissions_name
+      FROM users u
+      INNER JOIN roles_has_permissions rhp ON rhp.roles_id = u.roles_id
+      INNER JOIN permissions p ON p.id = rhp.permissions_id
+      WHERE u.id = ?
+      GROUP BY p.id
+      ORDER BY p.id
+      `,
+      [userId],
+      (err, rows) => {
+        if (err) return reject(err);
+        resolve(rows || []);
+      }
+    );
   });
 
 /**

@@ -8,13 +8,14 @@ const express = require('express');
 const router = express.Router();
 
 const { requireAuth } = require('../middleware/authMiddleware');
+const { requireAllPermissions } = require('../middleware/permissionMiddleware');
 const itemController = require('../controllers/itemController');
 
 // POST /api/items
-router.post('/', requireAuth, itemController.createItem);
+router.post('/', requireAuth, requireAllPermissions(['Access_Items', 'Add new Item']), itemController.createItem);
 
 // GET /api/items
-router.get('/', requireAuth, itemController.listItems);
+router.get('/', requireAuth, requireAllPermissions(['Access_Items']), itemController.listItems);
 
 // Export items as CSV
 // GET /api/items/export?type_filter=scale|normal
@@ -23,15 +24,15 @@ router.get('/export', requireAuth, itemController.exportItems);
 router.post('/export', requireAuth, itemController.exportItems);
 
 // GET /api/items/:id
-router.get('/:id', requireAuth, itemController.getItem);
+router.get('/:id', requireAuth, requireAllPermissions(['Access_Items']), itemController.getItem);
 
 // PUT /api/items/:id
-router.put('/:id', requireAuth, itemController.updateItem);
+router.put('/:id', requireAuth, requireAllPermissions(['Access_Items']), itemController.updateItem);
 
 // PATCH /api/items/:id/status
-router.patch('/:id/status', requireAuth, itemController.updateItemStatus);
+router.patch('/:id/status', requireAuth, requireAllPermissions(['Access_Items']), itemController.updateItemStatus);
 
 // Bulk import items from CSV
-router.post('/import', requireAuth, itemController.importItems);
+router.post('/import', requireAuth, requireAllPermissions(['Access_Items', 'Add new Item']), itemController.importItems);
 
 module.exports = router;

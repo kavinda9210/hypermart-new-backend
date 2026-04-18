@@ -4,6 +4,9 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
+const { requireAuth } = require('../middleware/authMiddleware');
+const { requireAllPermissions } = require('../middleware/permissionMiddleware');
+
 const router = express.Router();
 
 // Ensure the upload directory exists
@@ -28,7 +31,12 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 // POST /api/upload/item-image
-router.post('/item-image', upload.single('image'), (req, res) => {
+router.post(
+  '/item-image',
+  requireAuth,
+  requireAllPermissions(['Access_Items']),
+  upload.single('image'),
+  (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded.' });
   }
@@ -36,6 +44,7 @@ router.post('/item-image', upload.single('image'), (req, res) => {
   // e.g., upload/items/filename.jpg (since /upload is mapped in app.js)
   const relPath = `upload/items/${req.file.filename}`;
   res.json({ image_path: relPath });
-});
+  }
+);
 
 module.exports = router;

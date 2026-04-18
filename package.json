@@ -5,6 +5,7 @@
   "main": "server.js",
   "scripts": {
     "dev": "nodemon server.js",
+    "seed:default-role-permissions": "node scripts/apply-default-role-permissions.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
