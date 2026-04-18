@@ -1,3 +1,24 @@
+/**
+ * POST /api/users/roles
+ * Creates a new role in the database.
+ */
+exports.createRole = async (req, res) => {
+  const { role_name } = req.body || {};
+  if (!role_name || typeof role_name !== 'string' || !role_name.trim()) {
+    return res.status(400).json({ error: 'Role name is required.' });
+  }
+  try {
+    // Check for duplicate role name
+    const existingRoles = await userModel.listRoles();
+    if (existingRoles.some(r => r.role_name.toLowerCase() === role_name.trim().toLowerCase())) {
+      return res.status(409).json({ error: 'Role name already exists.' });
+    }
+    const created = await userModel.createRole({ role_name: role_name.trim() });
+    return res.status(201).json({ role: created });
+  } catch {
+    return res.status(500).json({ error: 'Server error.' });
+  }
+};
 /*
  * controllers/userController.js
  * Auth controller: login (issues JWT) and logout (stateless; client clears token).

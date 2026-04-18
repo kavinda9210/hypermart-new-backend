@@ -1,3 +1,22 @@
+/**
+ * Create a new role.
+ * @param {{role_name: string}} payload
+ * @returns {Promise<object>} The created role row
+ */
+exports.createRole = (payload) =>
+  new Promise((resolve, reject) => {
+    const now = new Date().toISOString();
+    // Insert the new role
+    const sql = `INSERT INTO roles (role_name, created_at, updated_at) VALUES (?, ?, ?)`;
+    db.run(sql, [payload.role_name, now, now], function (err) {
+      if (err) return reject(err);
+      // Return the created role (with id)
+      db.get('SELECT * FROM roles WHERE id = ?', [this.lastID], (err2, row) => {
+        if (err2) return reject(err2);
+        resolve(row);
+      });
+    });
+  });
 /*
  * models/userModel.js
  * Data-access layer for users/roles tables.
