@@ -6,4 +6,7 @@ const salesController = require('../controllers/salesController');
 // GET /api/sales
 router.get('/', requireAuth, salesController.listSales);
 
+// GET /api/sales/returns
+router.get('/returns', requireAuth, salesController.listSalesReturns);
+
 module.exports = router;
