@@ -1,5 +1,6 @@
 const expenseListRoutes = require('./routes/expenseListRoutes');
 const expenseRoutes = require('./routes/expenseRoutes');
+const bankRoutes = require('./routes/bankRoutes');
 /*
  * app.js
  * Express app setup: middleware, CORS, routes, and health/test endpoints.
@@ -79,7 +80,7 @@ app.use('/api/items', itemsRoutes);
 app.use('/api/expense-categories', expenseCategoryRoutes);
 app.use('/api/supplier-invoices', supplierInvoiceRoutes);
 app.use('/api/upload', uploadRoutes);
-
+app.use('/api/banks', bankRoutes);
 
 app.use('/api/customers', customersRoutes);
 app.use('/api/stock', stockRoutes);
