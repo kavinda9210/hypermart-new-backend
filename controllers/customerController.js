@@ -1,3 +1,8 @@
+// backend/controllers/customerController.js
+const customerModel = require('../models/customerModel');
+const userModel = require('../models/userModel');
+
+
 /**
  * GET /api/customers/:id
  * Get a single customer by ID
@@ -47,14 +52,12 @@ exports.listCustomers = async (req, res) => {
     return res.status(500).json({ error: 'Server error.' });
   }
 };
-// backend/controllers/customerController.js
-const customerModel = require('../models/customerModel');
+
 
 /**
  * POST /api/customers
  * Create a new customer.
  */
-const userModel = require('../models/userModel');
 exports.createCustomer = async (req, res) => {
   // Debug: log user info and permissions
   try {

@@ -1,3 +1,6 @@
+const Expense = require('../models/expenseModel');
+
+
 exports.getExpenseById = async (req, res) => {
   try {
     const id = req.params.id;
@@ -27,7 +30,6 @@ exports.updateExpenseById = async (req, res) => {
     res.status(500).json({ error: 'Failed to update expense', details: err.message });
   }
 };
-const Expense = require('../models/expenseModel');
 
 exports.deleteExpenseById = async (req, res) => {
   try {

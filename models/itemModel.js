@@ -1,4 +1,14 @@
 // Update only the status_id of an item
+/*
+ * models/itemModel.js
+ * Data-access layer for items table.
+ */
+
+
+const db = require('../config/db');
+
+
+
 exports.updateItemStatus = (id, status_id) =>
   new Promise((resolve, reject) => {
     const now = new Date().toISOString();
@@ -11,12 +21,8 @@ exports.updateItemStatus = (id, status_id) =>
       }
     );
   });
-/*
- * models/itemModel.js
- * Data-access layer for items table.
- */
 
-const db = require('../config/db');
+
 
 const buildItemsWhere = ({ searchTerm = '', categoryId = null, supplierId = null, scaleItem = null }) => {
   const where = [];
