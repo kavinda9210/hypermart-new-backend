@@ -17,12 +17,15 @@ exports.listSuppliers = async (req, res) => {
   const safeOffset = Number.isInteger(offset) && offset >= 0 ? offset : 0;
 
   try {
-    const suppliers = await supplierModel.listSuppliers({
-      searchTerm: search,
-      limit: safeLimit,
-      offset: safeOffset,
-    });
-    return res.json({ suppliers });
+    const [suppliers, totalCount] = await Promise.all([
+      supplierModel.listSuppliers({
+        searchTerm: search,
+        limit: safeLimit,
+        offset: safeOffset,
+      }),
+      supplierModel.countSuppliers({ searchTerm: search }),
+    ]);
+    return res.json({ suppliers, totalCount });
   } catch {
     return res.status(500).json({ error: 'Server error.' });
   }

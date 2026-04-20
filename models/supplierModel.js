@@ -1,3 +1,18 @@
+// Get total count of suppliers (with optional search)
+exports.countSuppliers = ({ searchTerm = '' }) =>
+  new Promise((resolve, reject) => {
+    const normalized = String(searchTerm || '').trim();
+    const whereClause = normalized ? 'WHERE LOWER(supplier_name) LIKE LOWER(?)' : '';
+    const params = normalized ? [`%${normalized}%`] : [];
+    db.get(
+      `SELECT COUNT(*) as count FROM suppliers ${whereClause}`,
+      params,
+      (err, row) => {
+        if (err) return reject(err);
+        resolve(Number(row?.count) || 0);
+      }
+    );
+  });
 /*
  * models/supplierModel.js
  * Data-access layer for suppliers table.

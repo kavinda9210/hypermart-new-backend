@@ -19,6 +19,9 @@ const usersRoutes = require('./routes/usersRoutes');
 // Import item categories routes (mounted under /api/item-categories).
 const itemCategoriesRoutes = require('./routes/itemCategoriesRoutes');
 const suppliersRoutes = require('./routes/suppliersRoutes');
+
+const supplierInvoiceRoutes = require('./routes/supplierInvoiceRoutes');
+const supplierChequeRoutes = require('./routes/supplierChequeRoutes');
 const itemsRoutes = require('./routes/itemsRoutes');
 
 const uploadRoutes = require('./routes/uploadRoutes');
@@ -55,6 +58,7 @@ const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, 'upload');
 app.use('/upload', express.static(path.join(__dirname, 'public', 'images', 'upload')));
 // Mount auth routes (keeps existing frontend URLs like /api/auth/login).
 app.use('/api/auth', userRoutes);
+app.use('/api/supplier-cheques', supplierChequeRoutes);
 
 // Mount user management routes.
 app.use('/api/users', usersRoutes);
@@ -63,6 +67,7 @@ app.use('/api/users', usersRoutes);
 app.use('/api/item-categories', itemCategoriesRoutes);
 app.use('/api/suppliers', suppliersRoutes);
 app.use('/api/items', itemsRoutes);
+app.use('/api/supplier-invoices', supplierInvoiceRoutes);
 app.use('/api/upload', uploadRoutes);
 
 
