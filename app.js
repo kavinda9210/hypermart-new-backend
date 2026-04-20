@@ -1,3 +1,5 @@
+const expenseListRoutes = require('./routes/expenseListRoutes');
+const expenseRoutes = require('./routes/expenseRoutes');
 /*
  * app.js
  * Express app setup: middleware, CORS, routes, and health/test endpoints.
@@ -18,6 +20,8 @@ const usersRoutes = require('./routes/usersRoutes');
 
 // Import item categories routes (mounted under /api/item-categories).
 const itemCategoriesRoutes = require('./routes/itemCategoriesRoutes');
+// Import expense categories routes (mounted under /api/expense-categories).
+const expenseCategoryRoutes = require('./routes/expenseCategoryRoutes');
 const suppliersRoutes = require('./routes/suppliersRoutes');
 
 const supplierInvoiceRoutes = require('./routes/supplierInvoiceRoutes');
@@ -31,6 +35,9 @@ const customersRoutes = require('./routes/customersRoutes');
 
 // Create the Express application instance.
 const app = express();
+
+// Register expense list route after app is defined
+app.use('/api/expenses-list', expenseListRoutes);
 
 // Read allowed frontend origin for dev CORS (Vite default is http://localhost:5173).
 const allowedOrigin = process.env.CORS_ORIGIN || 'http://localhost:5173';
@@ -58,6 +65,7 @@ const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, 'upload');
 app.use('/upload', express.static(path.join(__dirname, 'public', 'images', 'upload')));
 // Mount auth routes (keeps existing frontend URLs like /api/auth/login).
 app.use('/api/auth', userRoutes);
+app.use('/api/expenses', expenseRoutes);
 app.use('/api/supplier-cheques', supplierChequeRoutes);
 
 // Mount user management routes.
@@ -67,6 +75,8 @@ app.use('/api/users', usersRoutes);
 app.use('/api/item-categories', itemCategoriesRoutes);
 app.use('/api/suppliers', suppliersRoutes);
 app.use('/api/items', itemsRoutes);
+// Register expense categories route
+app.use('/api/expense-categories', expenseCategoryRoutes);
 app.use('/api/supplier-invoices', supplierInvoiceRoutes);
 app.use('/api/upload', uploadRoutes);
 
