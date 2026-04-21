@@ -114,3 +114,148 @@ exports.createCustomer = async (req, res) => {
     return res.status(500).json({ error: 'Server error.' });
   }
 };
+
+/**
+ * GET /api/customers/:id/transactions
+ * Get customer transaction history with filters
+ */
+exports.getCustomerTransactions = async (req, res) => {
+  const { id } = req.params;
+  const { date_from, date_to, transaction_type } = req.query;
+  
+  try {
+    // First check if customer exists
+    const customer = await customerModel.getCustomerBasicInfo(id);
+    if (!customer) {
+      return res.status(404).json({ success: false, error: 'Customer not found.' });
+    }
+    
+    // Get transactions
+    const transactions = await customerModel.getCustomerTransactions(id, {
+      date_from,
+      date_to,
+      transaction_type
+    });
+    
+    // Get summary
+    const summary = await customerModel.getCustomerTransactionSummary(id, {
+      date_from,
+      date_to
+    });
+    
+    // Calculate net balance (credits - debits) - positive means customer owes us
+    const netBalance = summary.total_credits - summary.total_debits;
+    
+    return res.json({
+      success: true,
+      customer: {
+        id: customer.id,
+        name: customer.customer_name,
+        code: customer.customer_code,
+        contact: customer.contact_number,
+        dueAmount: customer.due_amount || 0,
+        currentBalance: customer.current_balance || 0,
+        openingBalance: customer.opening_balance || 0,
+        openingBalanceType: customer.opening_balance_type || 'credit',
+        creditLimit: customer.credit_limit || 0
+      },
+      summary: {
+        totalDebits: summary.total_debits,
+        totalCredits: summary.total_credits,
+        netBalance: netBalance,
+        debitCount: summary.debit_count,
+        creditCount: summary.credit_count,
+        breakdown: {
+          invoices: {
+            total: summary.invoice_total,
+            count: summary.invoice_count
+          },
+          deposits: {
+            total: summary.deposit_total,
+            count: summary.deposit_count
+          },
+          cheques: {
+            total: summary.cheque_total,
+            count: summary.cheque_count
+          },
+          oilSales: {
+            total: summary.oil_sale_total,
+            count: summary.oil_sale_count
+          }
+        }
+      },
+      transactions: transactions.map(t => ({
+        id: t.id,
+        date: t.transaction_date,
+        type: t.type,
+        sourceType: t.source_type,
+        transactionType: t.transaction_type,
+        amount: t.amount,
+        description: t.description || this.getTransactionDescription(t),
+        referenceNumber: t.reference_number,
+        invoiceCode: t.invoice_code,
+        chequeNumber: t.cheque_number,
+        chequeStatus: t.cheque_status,
+        performedBy: t.performed_by,
+        createdAt: t.created_at
+      }))
+    });
+  } catch (err) {
+    console.error('[GetCustomerTransactions] Error:', err);
+    return res.status(500).json({ error: 'Server error.' });
+  }
+};
+
+/**
+ * Helper to generate description if not available
+ */
+getTransactionDescription = (transaction) => {
+  if (transaction.description) return transaction.description;
+  
+  if (transaction.source_type === 'customer_invoice') {
+    return `Invoice ${transaction.invoice_code || ''} - ${transaction.type === 'credit' ? 'Credit Bill' : 'Debit Note'}`;
+  }
+  if (transaction.source_type === 'customer_deposit') {
+    return `Customer Deposit - ${transaction.type === 'credit' ? 'Payment Received' : 'Refund Given'}`;
+  }
+  if (transaction.source_type === 'cheque') {
+    return `Cheque ${transaction.cheque_number || ''} - ${transaction.status || 'Transaction'}`;
+  }
+  if (transaction.source_type === 'oil_sale') {
+    return `Oil Sale Transaction`;
+  }
+  
+  return `${transaction.source_type || 'Transaction'} - ${transaction.type}`;
+};
+
+/**
+ * GET /api/customers/:id/transaction-detail/:transactionId
+ * Get single transaction details
+ */
+exports.getTransactionDetail = async (req, res) => {
+  const { id, transactionId } = req.params;
+  
+  try {
+    const transaction = await customerModel.getTransactionById(transactionId, id);
+    if (!transaction) {
+      return res.status(404).json({ success: false, error: 'Transaction not found.' });
+    }
+    
+    // Get additional details based on source type
+    let details = null;
+    if (transaction.source_type === 'customer_invoice') {
+      details = await customerModel.getInvoiceDetails(transaction.source_id);
+    } else if (transaction.source_type === 'cheque') {
+      details = await customerModel.getChequeDetails(transaction.source_id);
+    }
+    
+    return res.json({
+      success: true,
+      transaction,
+      details
+    });
+  } catch (err) {
+    console.error('[GetTransactionDetail] Error:', err);
+    return res.status(500).json({ error: 'Server error.' });
+  }
+};

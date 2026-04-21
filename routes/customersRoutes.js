@@ -17,4 +17,9 @@ router.get('/:id', requireAuth, requirePermission('View Customer List'), custome
 // PUT /api/customers/:id - Update customer (permission: View Customer List)
 router.put('/:id', requireAuth, requirePermission('View Customer List'), customerController.updateCustomer);
 
+// GET /api/customers/:id/transactions - Get customer transactions with filters
+router.get('/:id/transactions', requireAuth, requirePermission('View Customer List'), customerController.getCustomerTransactions);
+
+// GET /api/customers/:id/transaction-detail/:transactionId - Get single transaction details
+router.get('/:id/transaction-detail/:transactionId', requireAuth, requirePermission('View Customer List'), customerController.getTransactionDetail);
 module.exports = router;
