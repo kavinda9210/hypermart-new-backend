@@ -29,10 +29,12 @@ const supplierInvoiceRoutes = require('./routes/supplierInvoiceRoutes');
 const supplierChequeRoutes = require('./routes/supplierChequeRoutes');
 const itemsRoutes = require('./routes/itemsRoutes');
 
+
 const uploadRoutes = require('./routes/uploadRoutes');
 const stockRoutes = require('./routes/stockRoutes');
 const salesRoutes = require('./routes/salesRoutes');
 const customersRoutes = require('./routes/customersRoutes');
+const dashboardRoutes = require('./routes/dashboardRoutes');
 
 // Create the Express application instance.
 const app = express();
@@ -82,9 +84,11 @@ app.use('/api/supplier-invoices', supplierInvoiceRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/banks', bankRoutes);
 
+
 app.use('/api/customers', customersRoutes);
 app.use('/api/stock', stockRoutes);
 app.use('/api/sales', salesRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // GET /test-db
 // Quick health check to confirm the SQLite connection works.
