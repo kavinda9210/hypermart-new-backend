@@ -1,3 +1,37 @@
+/**
+ * GET /api/customers/:id/balance-transaction-log
+ * Get all balance-affecting transactions for a customer
+ */
+exports.getCustomerBalanceTransactionLog = async (req, res) => {
+  const { id } = req.params;
+  try {
+    // Check if customer exists
+    const customer = await customerModel.getCustomerBasicInfo(id);
+    if (!customer) {
+      return res.status(404).json({ success: false, error: 'Customer not found.' });
+    }
+    // Get balance transactions
+    const transactions = await customerModel.getCustomerBalanceTransactions(id);
+    return res.json({
+      success: true,
+      customer: {
+        id: customer.id,
+        name: customer.customer_name,
+        code: customer.customer_code,
+        contact: customer.contact_number,
+        dueAmount: customer.due_amount || 0,
+        currentBalance: customer.current_balance || 0,
+        openingBalance: customer.opening_balance || 0,
+        openingBalanceType: customer.opening_balance_type || 'credit',
+        creditLimit: customer.credit_limit || 0
+      },
+      transactions
+    });
+  } catch (err) {
+    console.error('[GetCustomerBalanceTransactionLog] Error:', err);
+    res.status(500).json({ success: false, error: 'Server error' });
+  }
+};
 // backend/controllers/customerController.js
 const customerModel = require('../models/customerModel');
 const userModel = require('../models/userModel');
@@ -605,3 +639,121 @@ exports.getCustomerVehicles = async (req, res) => {
     });
   }
 };
+
+// In customerController.js - Make sure this method exists and is complete
+
+/**
+ * GET /api/customers/:id/balance-transaction-log
+ * Get all balance-affecting transactions for a customer
+ */
+exports.getCustomerBalanceTransactionLog = async (req, res) => {
+  const { id } = req.params;
+  try {
+    // Check if customer exists
+    const customer = await customerModel.getCustomerBasicInfo(id);
+    if (!customer) {
+      return res.status(404).json({ success: false, error: 'Customer not found.' });
+    }
+    
+    // Get balance transactions
+    const transactions = await customerModel.getCustomerBalanceTransactions(id);
+    
+    // Format transactions for frontend
+    const formattedTransactions = transactions.map(t => ({
+      id: t.id,
+      date: t.transaction_date,
+      type: t.type, // 'debit' or 'credit'
+      transactionType: t.source_type,
+      amount: t.amount,
+      description: t.description || getTransactionDescription(t),
+      referenceNumber: t.reference_number,
+      invoiceCode: t.invoice_code,
+      chequeNumber: t.cheque_number,
+      chequeStatus: t.cheque_status,
+      performedBy: t.performed_by,
+      createdAt: t.created_at
+    }));
+    
+    // Calculate summary
+    const summary = {
+      totalDebits: 0,
+      totalCredits: 0,
+      netBalance: 0,
+      debitCount: 0,
+      creditCount: 0,
+      breakdown: {
+        invoices: { total: 0, count: 0 },
+        deposits: { total: 0, count: 0 },
+        cheques: { total: 0, count: 0 },
+        oilSales: { total: 0, count: 0 }
+      }
+    };
+    
+    formattedTransactions.forEach(t => {
+      if (t.type === 'debit') {
+        summary.totalDebits += t.amount;
+        summary.debitCount++;
+      } else {
+        summary.totalCredits += t.amount;
+        summary.creditCount++;
+      }
+      
+      // Breakdown by transaction type
+      if (t.transactionType === 'customer_invoice') {
+        summary.breakdown.invoices.total += t.amount;
+        summary.breakdown.invoices.count++;
+      } else if (t.transactionType === 'customer_deposit') {
+        summary.breakdown.deposits.total += t.amount;
+        summary.breakdown.deposits.count++;
+      } else if (t.transactionType === 'cheque') {
+        summary.breakdown.cheques.total += t.amount;
+        summary.breakdown.cheques.count++;
+      } else if (t.transactionType === 'oil_sale') {
+        summary.breakdown.oilSales.total += t.amount;
+        summary.breakdown.oilSales.count++;
+      }
+    });
+    
+    summary.netBalance = summary.totalCredits - summary.totalDebits;
+    
+    return res.json({
+      success: true,
+      customer: {
+        id: customer.id,
+        name: customer.customer_name,
+        code: customer.customer_code,
+        contact: customer.contact_number,
+        dueAmount: customer.due_amount || 0,
+        currentBalance: customer.current_balance || 0,
+        openingBalance: customer.opening_balance || 0,
+        openingBalanceType: customer.opening_balance_type || 'credit',
+        creditLimit: customer.credit_limit || 0
+      },
+      summary,
+      transactions: formattedTransactions
+    });
+  } catch (err) {
+    console.error('[GetCustomerBalanceTransactionLog] Error:', err);
+    res.status(500).json({ success: false, error: 'Server error: ' + err.message });
+  }
+};
+
+// Helper function to generate description
+function getTransactionDescription(transaction) {
+  if (transaction.description) return transaction.description;
+  
+  if (transaction.source_type === 'customer_invoice') {
+    return `Invoice ${transaction.invoice_code || ''} - ${transaction.type === 'credit' ? 'Credit Bill' : 'Debit Note'}`;
+  }
+  if (transaction.source_type === 'customer_deposit') {
+    return `Customer Deposit - ${transaction.type === 'credit' ? 'Payment Received' : 'Refund Given'}`;
+  }
+  if (transaction.source_type === 'cheque') {
+    return `Cheque ${transaction.cheque_number || ''}`;
+  }
+  if (transaction.source_type === 'oil_sale') {
+    return `Oil Sale Transaction`;
+  }
+  
+  return `${transaction.source_type || 'Transaction'} - ${transaction.type}`;
+}

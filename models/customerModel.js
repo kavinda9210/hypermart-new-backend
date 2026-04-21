@@ -1,3 +1,32 @@
+/**
+ * Get all balance-affecting transactions for a customer
+ * @param {string} customerId
+ * @returns {Promise<Array>} transaction rows
+ */
+exports.getCustomerBalanceTransactions = (customerId) =>
+  new Promise((resolve, reject) => {
+    // This query selects all transactions that affect the customer's balance
+    const query = `
+      SELECT 
+        ct.id,
+        ct.amount,
+        ct.type,
+        ct.source_type,
+        ct.source_id,
+        ct.transaction_date,
+        ct.reference_number,
+        ct.description,
+        ct.performed_by,
+        ct.created_at
+      FROM customer_transactions ct
+      WHERE ct.customer_id = ?
+      ORDER BY ct.transaction_date DESC, ct.created_at DESC
+    `;
+    db.all(query, [customerId], (err, rows) => {
+      if (err) return reject(err);
+      resolve(rows || []);
+    });
+  });
 const db = require('../config/db');
 const { randomUUID } = require('crypto')
 
@@ -814,4 +843,46 @@ exports.createBalanceLog = (data) =>
         resolve(this.lastID);
       }
     );
+  });
+
+/**
+ * Get all balance-affecting transactions for a customer
+ * @param {string} customerId
+ * @returns {Promise<Array>} transaction rows
+ */
+exports.getCustomerBalanceTransactions = (customerId) =>
+  new Promise((resolve, reject) => {
+    const query = `
+      SELECT 
+        ct.id,
+        ct.amount,
+        ct.type,
+        ct.source_type,
+        ct.transaction_date,
+        ct.reference_number,
+        ct.description,
+        ct.performed_by,
+        ct.created_at,
+        CASE 
+          WHEN ct.source_type = 'customer_invoice' THEN ci.invoice_code
+          ELSE NULL
+        END as invoice_code,
+        CASE 
+          WHEN ct.source_type = 'cheque' THEN ch.cheque_number
+          ELSE NULL
+        END as cheque_number,
+        CASE 
+          WHEN ct.source_type = 'cheque' THEN ch.status
+          ELSE NULL
+        END as cheque_status
+      FROM customer_transactions ct
+      LEFT JOIN customer_invoices ci ON ct.source_type = 'customer_invoice' AND ct.source_id = ci.id
+      LEFT JOIN cheques ch ON ct.source_type = 'cheque' AND ct.source_id = ch.id
+      WHERE ct.customer_id = ?
+      ORDER BY ct.transaction_date DESC, ct.created_at DESC
+    `;
+    db.all(query, [customerId], (err, rows) => {
+      if (err) return reject(err);
+      resolve(rows || []);
+    });
   });

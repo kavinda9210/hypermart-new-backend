@@ -1,9 +1,17 @@
+
 // backend/routes/customersRoutes.js
 const express = require('express');
 const router = express.Router();
 const customerController = require('../controllers/customerController');
 const { requirePermission } = require('../middleware/permissionMiddleware');
 const { requireAuth } = require('../middleware/authMiddleware');
+
+
+// GET /api/customers/:id/balance-transaction-log - Get customer balance transaction log
+
+router.get('/:id/balance-transaction-log', requireAuth, requirePermission('View Customer List'), customerController.getCustomerBalanceTransactionLog);
+// GET /api/customers/:id/balance-transaction-log - Get customer balance transaction log
+router.get('/:id/balance-transaction-log', requireAuth, requirePermission('View Customer List'), customerController.getCustomerBalanceTransactionLog);
 
 // Test route - MUST be before the /:id route
 router.get('/test', (req, res) => {
