@@ -36,6 +36,7 @@ const DEFAULT_PERMISSION_NAMES = [
   'Permission Update',
   'Add New Customers',
   'View Customer List',
+  'Add New Customer Transaction',
 ];
 
 async function main() {

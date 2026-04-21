@@ -1,22 +1,3 @@
-/**
- * Create a new role.
- * @param {{role_name: string}} payload
- * @returns {Promise<object>} The created role row
- */
-exports.createRole = (payload) =>
-  new Promise((resolve, reject) => {
-    const now = new Date().toISOString();
-    // Insert the new role
-    const sql = `INSERT INTO roles (role_name, created_at, updated_at) VALUES (?, ?, ?)`;
-    db.run(sql, [payload.role_name, now, now], function (err) {
-      if (err) return reject(err);
-      // Return the created role (with id)
-      db.get('SELECT * FROM roles WHERE id = ?', [this.lastID], (err2, row) => {
-        if (err2) return reject(err2);
-        resolve(row);
-      });
-    });
-  });
 /*
  * models/userModel.js
  * Data-access layer for users/roles tables.
@@ -26,13 +7,30 @@ exports.createRole = (payload) =>
 const db = require('../config/db');
 
 /**
+ * Create a new role.
+ * @param {{role_name: string}} payload
+ * @returns {Promise<object>} The created role row
+ */
+exports.createRole = (payload) =>
+  new Promise((resolve, reject) => {
+    const now = new Date().toISOString();
+    const sql = `INSERT INTO roles (role_name, created_at, updated_at) VALUES (?, ?, ?)`;
+    db.run(sql, [payload.role_name, now, now], function (err) {
+      if (err) return reject(err);
+      db.get('SELECT * FROM roles WHERE id = ?', [this.lastID], (err2, row) => {
+        if (err2) return reject(err2);
+        resolve(row);
+      });
+    });
+  });
+
+/**
  * Get a user row by email.
  * @param {string} email
  * @returns {Promise<object|null>}
  */
 exports.getUserByEmail = (email) =>
   new Promise((resolve, reject) => {
-    // Query a single user by email.
     db.get('SELECT * FROM users WHERE email = ?', [email], (err, row) => {
       if (err) return reject(err);
       resolve(row);
@@ -59,7 +57,6 @@ exports.getUserByMobile = (mobile) =>
  */
 exports.getRoleById = (id) =>
   new Promise((resolve, reject) => {
-    // Query a single role by primary key.
     db.get('SELECT * FROM roles WHERE id = ?', [id], (err, row) => {
       if (err) return reject(err);
       resolve(row);
@@ -180,7 +177,6 @@ exports.getUserById = (id) =>
  */
 exports.listUsers = () =>
   new Promise((resolve, reject) => {
-    // Join related tables to get friendly names for role/branch.
     db.all(
       `
       SELECT

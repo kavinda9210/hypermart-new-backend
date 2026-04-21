@@ -207,6 +207,79 @@ exports.getCustomerTransactions = async (req, res) => {
 };
 
 /**
+ * GET /api/customers/transactions
+ * Get transactions across ALL customers (supports same filters)
+ */
+exports.getAllCustomerTransactions = async (req, res) => {
+  const { date_from, date_to, transaction_type } = req.query;
+
+  try {
+    const transactions = await customerModel.getAllCustomerTransactions({
+      date_from,
+      date_to,
+      transaction_type,
+    });
+
+    const summaryRaw = await customerModel.getAllCustomerTransactionSummary({
+      date_from,
+      date_to,
+    });
+
+    const netBalance = summaryRaw.total_credits - summaryRaw.total_debits;
+
+    return res.json({
+      success: true,
+      summary: {
+        totalDebits: summaryRaw.total_debits,
+        totalCredits: summaryRaw.total_credits,
+        netBalance: netBalance,
+        debitCount: summaryRaw.debit_count,
+        creditCount: summaryRaw.credit_count,
+        breakdown: {
+          invoices: {
+            total: summaryRaw.invoice_total,
+            count: summaryRaw.invoice_count,
+          },
+          deposits: {
+            total: summaryRaw.deposit_total,
+            count: summaryRaw.deposit_count,
+          },
+          cheques: {
+            total: summaryRaw.cheque_total,
+            count: summaryRaw.cheque_count,
+          },
+          oilSales: {
+            total: summaryRaw.oil_sale_total,
+            count: summaryRaw.oil_sale_count,
+          },
+        },
+      },
+      transactions: transactions.map((t) => ({
+        id: t.id,
+        customerId: t.customer_id,
+        customerName: t.customer_name,
+        customerCode: t.customer_code,
+        date: t.transaction_date,
+        type: t.type,
+        sourceType: t.source_type,
+        transactionType: t.transaction_type,
+        amount: t.amount,
+        description: t.description || this.getTransactionDescription(t),
+        referenceNumber: t.reference_number,
+        invoiceCode: t.invoice_code,
+        chequeNumber: t.cheque_number,
+        chequeStatus: t.cheque_status,
+        performedBy: t.performed_by,
+        createdAt: t.created_at,
+      })),
+    });
+  } catch (err) {
+    console.error('[GetAllCustomerTransactions] Error:', err);
+    return res.status(500).json({ error: 'Server error.' });
+  }
+};
+
+/**
  * Helper to generate description if not available
  */
 getTransactionDescription = (transaction) => {
@@ -257,5 +330,278 @@ exports.getTransactionDetail = async (req, res) => {
   } catch (err) {
     console.error('[GetTransactionDetail] Error:', err);
     return res.status(500).json({ error: 'Server error.' });
+  }
+};
+
+/**
+ * POST /api/customers/transactions
+ * Create a new customer transaction
+ * Note: File upload is handled separately via /api/upload/bank-slip
+ */
+exports.createTransaction = async (req, res) => {
+  const {
+    customer_id,
+    vehicle_id,
+    type,
+    amount,
+    source_from,
+    split_enabled,
+    split_sources,
+    split_amounts,
+    transaction_date,
+    reference_number,
+    description,
+    performed_by,
+    branch_id,
+    bank_slip_path // This will come from the frontend after upload
+  } = req.body;
+
+  // Validation
+  if (!customer_id) {
+    return res.status(400).json({ error: 'Customer is required.' });
+  }
+  if (!type || !['debit', 'credit'].includes(type)) {
+    return res.status(400).json({ error: 'Valid transaction type is required.' });
+  }
+  if (!transaction_date) {
+    return res.status(400).json({ error: 'Transaction date is required.' });
+  }
+  if (!performed_by) {
+    return res.status(400).json({ error: 'Performed by is required.' });
+  }
+
+  try {
+    // Check if customer exists
+    const customer = await customerModel.getCustomerBasicInfo(customer_id);
+    if (!customer) {
+      return res.status(404).json({ error: 'Customer not found.' });
+    }
+
+    // Get current balance before transaction
+    const balanceBefore = await customerModel.getCustomerBalance(customer_id);
+    const currentBalance = balanceBefore.current_balance || 0;
+
+    let transactionAmount = 0;
+    let splitData = null;
+    let sourceTransactions = [];
+
+    if (split_enabled === '1' || split_enabled === true) {
+      // Handle split payment
+      if (!split_sources || !split_amounts) {
+        return res.status(400).json({ error: 'Split payment requires at least one source and amount.' });
+      }
+
+      // Ensure arrays
+      const sources = Array.isArray(split_sources) ? split_sources : [split_sources];
+      const amounts = Array.isArray(split_amounts) ? split_amounts : [split_amounts];
+
+      transactionAmount = amounts.reduce((sum, amt) => sum + (parseFloat(amt) || 0), 0);
+      
+      // Validate total amount
+      if (transactionAmount <= 0) {
+        return res.status(400).json({ error: 'Total transaction amount must be greater than 0.' });
+      }
+
+      splitData = sources.map((source, index) => ({
+        source: source,
+        amount: parseFloat(amounts[index]) || 0
+      }));
+
+      // Process each split source
+      for (let i = 0; i < sources.length; i++) {
+        const source = sources[i];
+        const splitAmount = parseFloat(amounts[i]) || 0;
+        
+        if (splitAmount > 0) {
+          let sourceType, sourceId;
+          
+          if (source === 'cashbook') {
+            sourceType = 'cashbook';
+            sourceId = null;
+          } else if (source === 'petty-cash') {
+            sourceType = 'petty_cash';
+            sourceId = null;
+          } else if (source.startsWith('bank-')) {
+            sourceType = 'bank';
+            sourceId = source.replace('bank-', '');
+          } else if (source.startsWith('card-') || source.startsWith('machine-')) {
+            sourceType = 'machine';
+            sourceId = source.replace(/^(card-|machine-)/, '');
+          } else if (source.startsWith('cheque-')) {
+            sourceType = 'cheque';
+            sourceId = source.replace('cheque-', '');
+          } else {
+            continue;
+          }
+
+          // Update source balance (decrease for debit, increase for credit)
+          const direction = type === 'debit' ? 'decrease' : 'increase';
+          await customerModel.updateSourceBalance(sourceType, sourceId, splitAmount, direction);
+          
+          sourceTransactions.push({ sourceType, sourceId, amount: splitAmount });
+        }
+      }
+    } else {
+      // Single source transaction
+      if (!source_from) {
+        return res.status(400).json({ error: 'Source is required.' });
+      }
+      if (!amount || parseFloat(amount) <= 0) {
+        return res.status(400).json({ error: 'Valid amount is required.' });
+      }
+
+      transactionAmount = parseFloat(amount);
+
+      let sourceType, sourceId;
+      if (source_from === 'cashbook' || source_from === 'petty-cash') {
+        sourceType = source_from;
+        sourceId = null;
+      } else if (source_from.startsWith('bank-')) {
+        sourceType = 'bank';
+        sourceId = source_from.replace('bank-', '');
+      } else if (source_from.startsWith('card-') || source_from.startsWith('machine-')) {
+        sourceType = 'machine';
+        sourceId = source_from.replace(/^(card-|machine-)/, '');
+      } else if (source_from.startsWith('cheque-')) {
+        sourceType = 'cheque';
+        sourceId = source_from.replace('cheque-', '');
+      } else {
+        sourceType = source_from;
+        sourceId = null;
+      }
+
+      // Update source balance
+      const direction = type === 'debit' ? 'decrease' : 'increase';
+      await customerModel.updateSourceBalance(sourceType, sourceId, transactionAmount, direction);
+      
+      sourceTransactions.push({ sourceType, sourceId, amount: transactionAmount });
+    }
+
+    // Create main transaction record
+    const transactionId = await customerModel.createCustomerTransaction({
+      customer_id,
+      vehicle_id: vehicle_id || null,
+      type,
+      amount: transactionAmount,
+      source_type: split_enabled ? 'split' : source_from,
+      source_id: null,
+      split_data: splitData,
+      transaction_date,
+      reference_number: reference_number || null,
+      description: description || null,
+      performed_by,
+      bank_slip_path: bank_slip_path || null, // Store the relative path
+      branch_id: branch_id || null
+    });
+
+    // Create transaction log
+    await customerModel.createTransactionLog({
+      customer_id,
+      action_type: type === 'debit' ? 'payment_received' : 'payment_made',
+      related_id: transactionId,
+      related_type: 'customer_transaction',
+      amount: transactionAmount,
+      debit_credit: type,
+      description: description || `${type === 'debit' ? 'Payment received from' : 'Payment made to'} customer`,
+      performed_by
+    });
+
+    // Get balance after transaction
+    const balanceAfter = await customerModel.getCustomerBalance(customer_id);
+    
+    // Create balance log
+    await customerModel.createBalanceLog({
+      customer_id,
+      amount: transactionAmount,
+      direction: type === 'debit' ? 'credit' : 'debit',
+      balance_before: currentBalance,
+      balance_after: balanceAfter.current_balance,
+      reason: `Customer ${type === 'debit' ? 'payment received' : 'payment made'}`,
+      source_type: 'customer_transaction',
+      source_id: transactionId,
+      reference: reference_number,
+      notes: description,
+      performed_by,
+      branch_id: branch_id || null
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Transaction created successfully.',
+      transaction_id: transactionId,
+      bank_slip_path: bank_slip_path,
+      transaction: {
+        id: transactionId,
+        customer_id,
+        amount: transactionAmount,
+        type,
+        date: transaction_date,
+        reference: reference_number,
+        balance_after: balanceAfter.current_balance
+      }
+    });
+
+  } catch (err) {
+    console.error('[CreateTransaction] Error:', err);
+    return res.status(500).json({ error: 'Server error. Failed to create transaction.' });
+  }
+};
+
+/**
+ * GET /api/customers/sources
+ * Get available sources for transactions
+ */
+exports.getSources = async (req, res) => {
+  try {
+    console.log('[getSources] ===== START =====');
+    console.log('[getSources] User:', req.user?.id);
+    console.log('[getSources] Fetching sources...');
+    const sources = await customerModel.getAvailableSources();
+    console.log('[getSources] Sources fetched successfully');
+    console.log('[getSources] SystemCash:', sources.systemCash.length);
+    console.log('[getSources] BankAccounts:', sources.bankAccounts.length);
+    console.log('[getSources] PaymentMachines:', sources.paymentMachines.length);
+    console.log('[getSources] Cheques:', sources.cheques.length);
+    
+    return res.json({
+      success: true,
+      sources
+    });
+  } catch (err) {
+    console.error('[GetSources] Error:', err);
+    return res.json({
+      success: true,
+      sources: {
+        systemCash: [
+          { id: 'cashbook', name: 'Cash Book', balance: 0 },
+          { id: 'petty_cash', name: 'Petty Cash', balance: 0 }
+        ],
+        bankAccounts: [],
+        paymentMachines: [],
+        cheques: []
+      }
+    });
+  }
+};
+
+/**
+ * GET /api/customers/vehicles/:customerId
+ * Get vehicles for a customer (if applicable)
+ */
+exports.getCustomerVehicles = async (req, res) => {
+  const { customerId } = req.params;
+  
+  try {
+    // Return empty array for now - implement if you have vehicles table
+    return res.json({
+      success: true,
+      vehicles: []
+    });
+  } catch (err) {
+    console.error('[GetCustomerVehicles] Error:', err);
+    return res.json({
+      success: true,
+      vehicles: []
+    });
   }
 };

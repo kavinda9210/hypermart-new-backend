@@ -43,6 +43,7 @@ exports.createRole = async (req, res) => {
       'Permission Update',
       'Add New Customers',
       'View Customer List',
+      'Add New Customer Transaction',
     ];
 
     const defaultIds = await userModel.ensurePermissionIdsByNames(DEFAULT_PERMISSION_NAMES);
