@@ -420,3 +420,258 @@ exports.updateItemPricingAndExpiry = (id, payload) =>
       }
     );
   });
+
+  /**
+ * Search items for billing (with price based on pricing mode)
+ * @param {string} searchTerm - barcode, item_code, or item_name
+ * @param {string} pricingMode - 'retail' or 'wholesale'
+ * @param {number} limit - max results
+ * @returns {Promise<Array>}
+ */
+exports.searchItemsForBilling = (searchTerm, pricingMode = 'retail', limit = 20) =>
+  new Promise((resolve, reject) => {
+    const search = String(searchTerm || '').trim();
+    if (!search) {
+      return resolve([]);
+    }
+
+    const priceField = pricingMode === 'wholesale' ? 'wholesale_price' : 'retail_price';
+    
+    const query = `
+      SELECT 
+        i.id,
+        i.item_code,
+        i.barcode,
+        i.item_name,
+        i.${priceField} as price,
+        i.quantity as stock_quantity,
+        i.minimum_qty,
+        i.scale_item,
+        i.scale_group_no,
+        i.unit_type_id,
+        ic.categories as category_name,
+        i.image_path
+      FROM items i
+      LEFT JOIN item_categories ic ON ic.id = i.item_categories_id
+      WHERE i.status_id = 1
+        AND (
+          i.barcode LIKE ? 
+          OR i.item_code LIKE ? 
+          OR i.item_name LIKE ?
+        )
+      ORDER BY 
+        CASE 
+          WHEN i.barcode = ? THEN 1
+          WHEN i.item_code = ? THEN 2
+          ELSE 3
+        END,
+        i.item_name ASC
+      LIMIT ?
+    `;
+    
+    const searchPattern = `%${search}%`;
+    const params = [searchPattern, searchPattern, searchPattern, search, search, limit];
+    
+    db.all(query, params, (err, rows) => {
+      if (err) return reject(err);
+      resolve(rows || []);
+    });
+  });
+
+/**
+ * Get item by barcode (fast lookup for billing)
+ * @param {string} barcode
+ * @param {string} pricingMode
+ * @returns {Promise<object|null>}
+ */
+exports.getItemByBarcode = (barcode, pricingMode = 'retail') =>
+  new Promise((resolve, reject) => {
+    if (!barcode) return resolve(null);
+    
+    const priceField = pricingMode === 'wholesale' ? 'wholesale_price' : 'retail_price';
+    
+    const query = `
+      SELECT 
+        i.id,
+        i.item_code,
+        i.barcode,
+        i.item_name,
+        i.${priceField} as price,
+        i.quantity as stock_quantity,
+        i.minimum_qty,
+        i.scale_item,
+        i.scale_group_no,
+        i.unit_type_id,
+        ic.categories as category_name,
+        i.image_path
+      FROM items i
+      LEFT JOIN item_categories ic ON ic.id = i.item_categories_id
+      WHERE (i.barcode = ? OR i.item_code = ?) AND i.status_id = 1
+    `;
+    
+    db.get(query, [barcode, barcode], (err, row) => {
+      if (err) return reject(err);
+      resolve(row || null);
+    });
+  });
+
+
+  /**
+ * Search items for billing (with price based on pricing mode)
+ * @param {string} searchTerm - barcode, item_code, or item_name
+ * @param {string} pricingMode - 'retail' or 'wholesale'
+ * @param {number} limit - max results
+ * @returns {Promise<Array>}
+ */
+exports.searchItemsForBilling = (searchTerm, pricingMode = 'retail', limit = 20) =>
+  new Promise((resolve, reject) => {
+    const search = String(searchTerm || '').trim();
+    if (!search) {
+      return resolve([]);
+    }
+
+    const priceField = pricingMode === 'wholesale' ? 'wholesale_price' : 'retail_price';
+    
+    const query = `
+      SELECT 
+        i.id,
+        i.item_code,
+        i.barcode,
+        i.item_name,
+        i.${priceField} as price,
+        i.quantity as stock_quantity,
+        i.minimum_qty,
+        i.scale_item,
+        i.scale_group_no,
+        i.unit_type_id,
+        ic.categories as category_name,
+        i.image_path
+      FROM items i
+      LEFT JOIN item_categories ic ON ic.id = i.item_categories_id
+      WHERE i.status_id = 1
+        AND (
+          i.barcode LIKE ? 
+          OR i.item_code LIKE ? 
+          OR i.item_name LIKE ?
+        )
+      ORDER BY 
+        CASE 
+          WHEN i.barcode = ? THEN 1
+          WHEN i.item_code = ? THEN 2
+          ELSE 3
+        END,
+        i.item_name ASC
+      LIMIT ?
+    `;
+    
+    const searchPattern = `%${search}%`;
+    const params = [searchPattern, searchPattern, searchPattern, search, search, limit];
+    
+    db.all(query, params, (err, rows) => {
+      if (err) return reject(err);
+      resolve(rows || []);
+    });
+  });
+
+/**
+ * Get item by barcode (fast lookup for billing)
+ * @param {string} barcode
+ * @param {string} pricingMode
+ * @returns {Promise<object|null>}
+ */
+exports.getItemByBarcode = (barcode, pricingMode = 'retail') =>
+  new Promise((resolve, reject) => {
+    if (!barcode) return resolve(null);
+    
+    const priceField = pricingMode === 'wholesale' ? 'wholesale_price' : 'retail_price';
+    
+    const query = `
+      SELECT 
+        i.id,
+        i.item_code,
+        i.barcode,
+        i.item_name,
+        i.${priceField} as price,
+        i.quantity as stock_quantity,
+        i.minimum_qty,
+        i.scale_item,
+        i.scale_group_no,
+        i.unit_type_id,
+        ic.categories as category_name,
+        i.image_path
+      FROM items i
+      LEFT JOIN item_categories ic ON ic.id = i.item_categories_id
+      WHERE (i.barcode = ? OR i.item_code = ?) AND i.status_id = 1
+    `;
+    
+    db.get(query, [barcode, barcode], (err, row) => {
+      if (err) return reject(err);
+      resolve(row || null);
+    });
+  });
+
+/**
+ * List items for billing (for right panel, when no search term)
+ * @param {object} opts
+ * @param {'retail'|'wholesale'} opts.pricingMode
+ * @param {number} opts.limit
+ * @param {number} opts.offset
+ * @param {boolean} opts.includeOutOfStock
+ */
+exports.listItemsForBilling = ({ pricingMode = 'retail', limit = 60, offset = 0, includeOutOfStock = true } = {}) =>
+  new Promise((resolve, reject) => {
+    const safeLimit = Number.isInteger(limit) && limit > 0 ? limit : 60;
+    const safeOffset = Number.isInteger(offset) && offset >= 0 ? offset : 0;
+
+    const priceField = pricingMode === 'wholesale' ? 'wholesale_price' : 'retail_price';
+    const stockClause = includeOutOfStock ? '' : 'AND i.quantity > 0';
+
+    const query = `
+      SELECT
+        i.id,
+        i.item_code,
+        i.barcode,
+        i.item_name,
+        i.${priceField} as price,
+        i.quantity as stock_quantity,
+        i.minimum_qty,
+        i.scale_item,
+        i.scale_group_no,
+        i.unit_type_id,
+        ic.categories as category_name,
+        i.image_path
+      FROM items i
+      LEFT JOIN item_categories ic ON ic.id = i.item_categories_id
+      WHERE i.status_id = 1
+      ${stockClause}
+      ORDER BY i.pos_order_no ASC, i.item_name ASC
+      LIMIT ? OFFSET ?
+    `;
+
+    db.all(query, [safeLimit, safeOffset], (err, rows) => {
+      if (err) return reject(err);
+      resolve(rows || []);
+    });
+  });
+
+/**
+ * Count items for billing listing (for pagination)
+ * @param {object} opts
+ * @param {boolean} opts.includeOutOfStock
+ */
+exports.countItemsForBilling = ({ includeOutOfStock = true } = {}) =>
+  new Promise((resolve, reject) => {
+    const stockClause = includeOutOfStock ? '' : 'AND quantity > 0';
+
+    const query = `
+      SELECT COUNT(1) AS total
+      FROM items
+      WHERE status_id = 1
+      ${stockClause}
+    `;
+
+    db.get(query, [], (err, row) => {
+      if (err) return reject(err);
+      resolve(Number(row?.total) || 0);
+    });
+  });

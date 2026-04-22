@@ -35,6 +35,7 @@ const stockRoutes = require('./routes/stockRoutes');
 const salesRoutes = require('./routes/salesRoutes');
 const customersRoutes = require('./routes/customersRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
+const billingRoutes = require('./routes/billingRoutes');
 
 // Create the Express application instance.
 const app = express();
@@ -70,7 +71,7 @@ app.use('/upload', express.static(path.join(__dirname, 'public', 'images', 'uplo
 app.use('/api/auth', userRoutes);
 app.use('/api/expenses', expenseRoutes);
 app.use('/api/supplier-cheques', supplierChequeRoutes);
-
+app.use('/api/billing', billingRoutes);
 // Mount user management routes.
 app.use('/api/users', usersRoutes);
 
@@ -89,6 +90,7 @@ app.use('/api/customers', customersRoutes);
 app.use('/api/stock', stockRoutes);
 app.use('/api/sales', salesRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+
 
 // GET /test-db
 // Quick health check to confirm the SQLite connection works.
