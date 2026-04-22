@@ -17,6 +17,310 @@ const withImageUrl = (item) => {
   return { ...item, image_url: toImageUrl(item.image_path) };
 };
 
+// Helper function to escape HTML
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// Helper function to generate bill HTML
+function generateBillHTML(data) {
+  const {
+    salesCode,
+    date,
+    customer,
+    items,
+    totals,
+    payment,
+    user,
+    pricing_mode
+  } = data;
+
+  const formatNumber = (num) => {
+    return new Intl.NumberFormat('en-LK', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(num || 0);
+  };
+
+  const formatDate = (d) => {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  const formatTime = (d) => {
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  };
+
+  const itemsHtml = items.map((item, index) => `
+    <tr style="border-bottom: 1px dashed #ccc;">
+      <td style="padding: 4px 2px; width: 10%;">${index + 1}</td>
+      <td style="padding: 4px 2px; width: 40%;">
+        ${escapeHtml(item.item_name)}<br/>
+        <small style="color: #666;">${escapeHtml(item.item_code)}</small>
+      </td>
+      <td style="padding: 4px 2px; width: 15%; text-align: center;">${item.quantity}</td>
+      <td style="padding: 4px 2px; width: 15%; text-align: right;">${formatNumber(item.price)}</td>
+      <td style="padding: 4px 2px; width: 20%; text-align: right;">${formatNumber(item.subtotal)}</td>
+    </tr>
+  `).join('');
+
+  const ciType = totals.dueAmount > 0 ? 'CREDIT' : 'DEBIT';
+  
+  // Get customer name - handle both object and direct value
+  let customerName = 'WALK-IN CUSTOMER';
+  let customerVatNo = '-';
+  
+  if (customer) {
+    if (typeof customer === 'object') {
+      customerName = customer.customer_name || 'WALK-IN CUSTOMER';
+      customerVatNo = customer.vat_number || '-';
+    } else if (typeof customer === 'string') {
+      customerName = customer;
+    }
+  }
+
+  // Get payment type display
+  let paymentTypeDisplay = payment.type;
+  if (payment.split_payments && payment.split_payments.length > 1) {
+    paymentTypeDisplay = 'SPLIT';
+  } else if (payment.split_payments && payment.split_payments.length === 1) {
+    paymentTypeDisplay = payment.split_payments[0].source_type;
+  }
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Sale Receipt #${escapeHtml(salesCode)}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            width: 75mm;
+            margin: 0 auto;
+            padding: 5px;
+            background: white;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 1px dashed #000;
+        }
+        .shop-name {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .shop-address {
+            font-size: 10px;
+            color: #555;
+        }
+        .shop-contact {
+            font-size: 10px;
+            font-weight: bold;
+        }
+        .sale-code {
+            text-align: center;
+            font-size: 14px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 3px;
+            font-size: 10px;
+        }
+        .divider {
+            border-top: 1px dashed #000;
+            margin: 8px 0;
+        }
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 8px 0;
+        }
+        .items-table th {
+            text-align: left;
+            border-bottom: 1px solid #000;
+            padding: 4px 2px;
+            font-size: 10px;
+        }
+        .totals {
+            margin-top: 8px;
+            border-top: 1px dashed #000;
+            padding-top: 8px;
+        }
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 3px;
+            font-size: 11px;
+        }
+        .grand-total {
+            font-weight: bold;
+            font-size: 13px;
+            margin-top: 5px;
+            padding-top: 5px;
+            border-top: 1px solid #000;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 10px;
+            padding-top: 8px;
+            border-top: 1px dashed #000;
+            font-size: 9px;
+        }
+        .thankyou {
+            font-weight: bold;
+            margin: 8px 0;
+        }
+        .text-right {
+            text-align: right;
+        }
+        .text-center {
+            text-align: center;
+        }
+        .bold {
+            font-weight: bold;
+        }
+        @media print {
+            body {
+                margin: 0;
+                padding: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="shop-name">HYPERMART</div>
+        <div class="shop-address">8th Mile Post, Kandy Road, Mawathagama</div>
+        <div class="shop-contact">Tel: +94 77 361 0779</div>
+    </div>
+
+    <div class="sale-code">SALE CODE: ${escapeHtml(salesCode)}</div>
+
+    <div class="info-row">
+        <span>DATE: ${formatDate(date)}</span>
+        <span>TIME: ${formatTime(date)}</span>
+    </div>
+    <div class="info-row">
+        <span>CUS: ${escapeHtml(customerName)}</span>
+        <span>VAT NO: ${escapeHtml(customerVatNo)}</span>
+    </div>
+    <div class="info-row">
+        <span>PTYPE: ${escapeHtml(paymentTypeDisplay)}</span>
+        <span>USER: ${escapeHtml(user)}</span>
+    </div>
+    <div class="info-row">
+        <span>STYPE: ${escapeHtml(pricing_mode)}</span>
+        <span>CI TYPE: ${ciType}</span>
+    </div>
+
+    <div class="divider"></div>
+
+    <table class="items-table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>ITEM</th>
+                <th class="text-center">QTY</th>
+                <th class="text-right">PRICE</th>
+                <th class="text-right">AMOUNT</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${itemsHtml}
+        </tbody>
+    </table>
+
+    <div class="divider"></div>
+
+    <div class="totals">
+        <div class="total-row">
+            <span>TOTAL</span>
+            <span>${formatNumber(totals.subTotal)}</span>
+        </div>
+        ${totals.totalDiscount > 0 ? `
+        <div class="total-row">
+            <span>DISCOUNT</span>
+            <span>${formatNumber(totals.totalDiscount)}</span>
+        </div>
+        ` : ''}
+        <div class="total-row grand-total">
+            <span>NET TOTAL</span>
+            <span>${formatNumber(totals.grandTotal)}</span>
+        </div>
+        <div class="total-row">
+            <span>RECEIVED</span>
+            <span>${formatNumber(totals.receivedAmount)}</span>
+        </div>
+        <div class="total-row">
+            <span>PAID</span>
+            <span>${formatNumber(totals.paidAmount)}</span>
+        </div>
+        ${totals.changeAmount > 0 ? `
+        <div class="total-row">
+            <span>CHANGE</span>
+            <span>${formatNumber(totals.changeAmount)}</span>
+        </div>
+        ` : ''}
+        ${totals.dueAmount > 0 ? `
+        <div class="total-row bold" style="color: red;">
+            <span>DUE AMOUNT</span>
+            <span>${formatNumber(totals.dueAmount)}</span>
+        </div>
+        ` : ''}
+        <div class="total-row">
+            <span>NO OF ITEMS</span>
+            <span>${items.length}</span>
+        </div>
+        <div class="total-row">
+            <span>TOTAL QTY</span>
+            <span>${items.reduce((sum, i) => sum + i.quantity, 0)}</span>
+        </div>
+    </div>
+
+    ${payment.split_payments && payment.split_payments.length > 0 ? `
+    <div class="divider"></div>
+    <div class="totals">
+        <div class="total-row bold">
+            <span>SPLIT PAYMENTS</span>
+            <span></span>
+        </div>
+        ${payment.split_payments.map(sp => `
+        <div class="total-row">
+            <span>${escapeHtml(sp.source_type)}</span>
+            <span>${formatNumber(sp.amount)}</span>
+        </div>
+        `).join('')}
+    </div>
+    ` : ''}
+
+    <div class="divider"></div>
+
+    <div class="footer">
+        <div class="thankyou">THANK YOU! VISIT AGAIN</div>
+        <div>Exchange within 07 days if item is in good condition.</div>
+        <div>Bill must be produced for claims.</div>
+        <div style="margin-top: 5px; font-size: 8px;">Powered by Silicon Radon Networks (Pvt) Ltd.</div>
+    </div>
+</body>
+</html>`;
+}
+
 /**
  * GET /api/billing/search-items
  */
@@ -371,9 +675,6 @@ exports.getPaymentSources = async (req, res) => {
 /**
  * POST /api/billing/process-payment
  */
-/**
- * POST /api/billing/process-payment
- */
 exports.processPayment = async (req, res) => {
   const {
     customer_id,
@@ -622,282 +923,6 @@ exports.processPayment = async (req, res) => {
     res.status(500).json({ error: 'Server error: ' + err.message });
   }
 };
-
-// Helper function to generate bill HTML
-function generateBillHTML(data) {
-  const {
-    salesCode,
-    date,
-    customer,
-    items,
-    totals,
-    payment,
-    user,
-    pricing_mode
-  } = data;
-
-  const formatNumber = (num) => {
-    return new Intl.NumberFormat('en-LK', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(num || 0);
-  };
-
-  const formatDate = (d) => {
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  };
-
-  const formatTime = (d) => {
-    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-  };
-
-  const itemsHtml = items.map((item, index) => `
-    <tr style="border-bottom: 1px dashed #ccc;">
-      <td style="padding: 4px 2px; width: 10%;">${index + 1}</td>
-      <td style="padding: 4px 2px; width: 40%;">
-        ${item.item_name}<br/>
-        <small style="color: #666;">${item.item_code}</small>
-      </td>
-      <td style="padding: 4px 2px; width: 15%; text-align: center;">${item.quantity}</td>
-      <td style="padding: 4px 2px; width: 15%; text-align: right;">${formatNumber(item.price)}</td>
-      <td style="padding: 4px 2px; width: 20%; text-align: right;">${formatNumber(item.subtotal)}</td>
-    </tr>
-  `).join('');
-
-  const ciType = totals.dueAmount > 0 ? 'CREDIT' : 'DEBIT';
-
-  return `<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Sale Receipt #${salesCode}</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body {
-            font-family: 'Courier New', monospace;
-            font-size: 12px;
-            width: 75mm;
-            margin: 0 auto;
-            padding: 5px;
-            background: white;
-        }
-        .header {
-            text-align: center;
-            margin-bottom: 10px;
-            padding-bottom: 5px;
-            border-bottom: 1px dashed #000;
-        }
-        .shop-name {
-            font-size: 18px;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-        .shop-address {
-            font-size: 10px;
-            color: #555;
-        }
-        .shop-contact {
-            font-size: 10px;
-            font-weight: bold;
-        }
-        .sale-code {
-            text-align: center;
-            font-size: 14px;
-            font-weight: bold;
-            margin: 10px 0;
-        }
-        .info-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 3px;
-            font-size: 10px;
-        }
-        .divider {
-            border-top: 1px dashed #000;
-            margin: 8px 0;
-        }
-        .items-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 8px 0;
-        }
-        .items-table th {
-            text-align: left;
-            border-bottom: 1px solid #000;
-            padding: 4px 2px;
-            font-size: 10px;
-        }
-        .totals {
-            margin-top: 8px;
-            border-top: 1px dashed #000;
-            padding-top: 8px;
-        }
-        .total-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 3px;
-            font-size: 11px;
-        }
-        .grand-total {
-            font-weight: bold;
-            font-size: 13px;
-            margin-top: 5px;
-            padding-top: 5px;
-            border-top: 1px solid #000;
-        }
-        .footer {
-            text-align: center;
-            margin-top: 10px;
-            padding-top: 8px;
-            border-top: 1px dashed #000;
-            font-size: 9px;
-        }
-        .thankyou {
-            font-weight: bold;
-            margin: 8px 0;
-        }
-        .barcode {
-            text-align: center;
-            margin: 8px 0;
-        }
-        .text-right {
-            text-align: right;
-        }
-        .text-center {
-            text-align: center;
-        }
-        .bold {
-            font-weight: bold;
-        }
-        @media print {
-            body {
-                margin: 0;
-                padding: 0;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <div class="shop-name">HYPERMART</div>
-        <div class="shop-address">8th Mile Post, Kandy Road, Mawathagama</div>
-        <div class="shop-contact">Tel: +94 77 361 0779</div>
-    </div>
-
-    <div class="sale-code">SALE CODE: ${salesCode}</div>
-
-    <div class="info-row">
-        <span>DATE: ${formatDate(date)}</span>
-        <span>TIME: ${formatTime(date)}</span>
-    </div>
-    <div class="info-row">
-        <span>CUS: ${customer?.customer_name || 'WALK-IN CUSTOMER'}</span>
-        <span>VAT NO: ${customer?.vat_number || '-'}</span>
-    </div>
-    <div class="info-row">
-        <span>PTYPE: ${payment.type}</span>
-        <span>USER: ${user}</span>
-    </div>
-    <div class="info-row">
-        <span>STYPE: ${pricing_mode}</span>
-        <span>CI TYPE: ${ciType}</span>
-    </div>
-
-    <div class="divider"></div>
-
-    <table class="items-table">
-        <thead>
-            <tr>
-                <th>#</th>
-                <th>ITEM</th>
-                <th class="text-center">QTY</th>
-                <th class="text-right">PRICE</th>
-                <th class="text-right">AMOUNT</th>
-            </tr>
-        </thead>
-        <tbody>
-            ${itemsHtml}
-        </tbody>
-    </table>
-
-    <div class="divider"></div>
-
-    <div class="totals">
-        <div class="total-row">
-            <span>TOTAL</span>
-            <span>${formatNumber(totals.subTotal)}</span>
-        </div>
-        ${totals.totalDiscount > 0 ? `
-        <div class="total-row">
-            <span>DISCOUNT</span>
-            <span>${formatNumber(totals.totalDiscount)}</span>
-        </div>
-        ` : ''}
-        <div class="total-row grand-total">
-            <span>NET TOTAL</span>
-            <span>${formatNumber(totals.grandTotal)}</span>
-        </div>
-        <div class="total-row">
-            <span>RECEIVED</span>
-            <span>${formatNumber(totals.receivedAmount)}</span>
-        </div>
-        <div class="total-row">
-            <span>PAID</span>
-            <span>${formatNumber(totals.paidAmount)}</span>
-        </div>
-        ${totals.changeAmount > 0 ? `
-        <div class="total-row">
-            <span>CHANGE</span>
-            <span>${formatNumber(totals.changeAmount)}</span>
-        </div>
-        ` : ''}
-        ${totals.dueAmount > 0 ? `
-        <div class="total-row bold" style="color: red;">
-            <span>DUE AMOUNT</span>
-            <span>${formatNumber(totals.dueAmount)}</span>
-        </div>
-        ` : ''}
-        <div class="total-row">
-            <span>NO OF ITEMS</span>
-            <span>${items.length}</span>
-        </div>
-        <div class="total-row">
-            <span>TOTAL QTY</span>
-            <span>${items.reduce((sum, i) => sum + i.quantity, 0)}</span>
-        </div>
-    </div>
-
-    ${payment.split_payments && payment.split_payments.length > 0 ? `
-    <div class="divider"></div>
-    <div class="totals">
-        <div class="total-row bold">
-            <span>SPLIT PAYMENTS</span>
-            <span></span>
-        </div>
-        ${payment.split_payments.map(sp => `
-        <div class="total-row">
-            <span>${sp.source_type}</span>
-            <span>${formatNumber(sp.amount)}</span>
-        </div>
-        `).join('')}
-    </div>
-    ` : ''}
-
-    <div class="divider"></div>
-
-    <div class="footer">
-        <div class="thankyou">THANK YOU! VISIT AGAIN</div>
-        <div>Exchange within 07 days if item is in good condition.</div>
-        <div>Bill must be produced for claims.</div>
-        <div style="margin-top: 5px; font-size: 8px;">Powered by Silicon Radon Networks (Pvt) Ltd.</div>
-    </div>
-</body>
-</html>`;
-}
 
 /**
  * GET /api/billing/customers/search
