@@ -675,3 +675,181 @@ exports.countItemsForBilling = ({ includeOutOfStock = true } = {}) =>
       resolve(Number(row?.total) || 0);
     });
   });
+
+/**
+ * Update item stock after sale
+ * @param {string} itemId 
+ * @param {number} quantity - quantity to deduct
+ * @returns {Promise<object>}
+ */
+exports.deductItemStock = (itemId, quantity) =>
+  new Promise((resolve, reject) => {
+    const now = new Date().toISOString();
+    const qty = Number(quantity);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      return reject(new Error('Invalid quantity'));
+    }
+
+    db.run(
+      `UPDATE items SET quantity = quantity - ?, updated_at = ? WHERE id = ? AND quantity >= ?`,
+      [qty, now, itemId, qty],
+      function (err) {
+        if (err) return reject(err);
+        if (this.changes === 0) {
+          return reject(new Error('Insufficient stock'));
+        }
+        resolve({ changes: this.changes, updated_at: now });
+      }
+    );
+  });
+
+/**
+ * Get multiple items with stock info
+ * @param {string[]} itemIds 
+ * @returns {Promise<Array>}
+ */
+exports.getItemsWithStock = (itemIds) =>
+  new Promise((resolve, reject) => {
+    if (!itemIds.length) return resolve([]);
+    
+    const placeholders = itemIds.map(() => '?').join(',');
+    const query = `
+      SELECT 
+        id, item_code, item_name, quantity as stock_quantity,
+        retail_price, wholesale_price, minimum_qty
+      FROM items 
+      WHERE id IN (${placeholders})
+    `;
+    
+    db.all(query, itemIds, (err, rows) => {
+      if (err) return reject(err);
+      resolve(rows || []);
+    });
+  });
+
+/**
+ * Get multiple items by IDs with pricing
+ * @param {string[]} itemIds
+ * @param {string} pricingMode
+ * @returns {Promise<Array>}
+ */
+exports.getItemsByIds = (itemIds, pricingMode = 'retail') =>
+  new Promise((resolve, reject) => {
+    if (!itemIds || !itemIds.length) return resolve([]);
+    
+    const priceField = pricingMode === 'wholesale' ? 'wholesale_price' : 'retail_price';
+    const placeholders = itemIds.map(() => '?').join(',');
+    
+    const query = `
+      SELECT 
+        id, item_code, barcode, item_name,
+        ${priceField} as price,
+        quantity as stock_quantity,
+        minimum_qty,
+        scale_item, scale_group_no, unit_type_id,
+        image_path
+      FROM items 
+      WHERE id IN (${placeholders})
+    `;
+    
+    db.all(query, itemIds, (err, rows) => {
+      if (err) return reject(err);
+      resolve(rows || []);
+    });
+  });
+
+/**
+ * Search items for billing
+ */
+exports.searchItemsForBilling = (searchTerm, pricingMode = 'retail', limit = 20) =>
+  new Promise((resolve, reject) => {
+    const search = String(searchTerm || '').trim();
+    if (!search) return resolve([]);
+
+    const priceField = pricingMode === 'wholesale' ? 'wholesale_price' : 'retail_price';
+    
+    const query = `
+      SELECT 
+        i.id, i.item_code, i.barcode, i.item_name,
+        i.${priceField} as price,
+        i.quantity as stock_quantity,
+        i.minimum_qty,
+        i.scale_item, i.scale_group_no, i.unit_type_id,
+        ic.categories as category_name,
+        i.image_path
+      FROM items i
+      LEFT JOIN item_categories ic ON ic.id = i.item_categories_id
+      WHERE i.status_id = 1
+        AND (i.barcode LIKE ? OR i.item_code LIKE ? OR i.item_name LIKE ?)
+      ORDER BY i.item_name ASC
+      LIMIT ?
+    `;
+    
+    const searchPattern = `%${search}%`;
+    db.all(query, [searchPattern, searchPattern, searchPattern, limit], (err, rows) => {
+      if (err) reject(err);
+      else resolve(rows || []);
+    });
+  });
+
+/**
+ * Get item by barcode
+ */
+exports.getItemByBarcode = (barcode, pricingMode = 'retail') =>
+  new Promise((resolve, reject) => {
+    if (!barcode) return resolve(null);
+    
+    const priceField = pricingMode === 'wholesale' ? 'wholesale_price' : 'retail_price';
+    
+    db.get(
+      `SELECT id, item_code, barcode, item_name, ${priceField} as price,
+              quantity as stock_quantity, minimum_qty, image_path
+       FROM items 
+       WHERE (barcode = ? OR item_code = ?) AND status_id = 1`,
+      [barcode, barcode],
+      (err, row) => {
+        if (err) reject(err);
+        else resolve(row || null);
+      }
+    );
+  });
+
+/**
+ * List items for billing panel
+ */
+exports.listItemsForBilling = ({ pricingMode = 'retail', limit = 60, offset = 0, includeOutOfStock = true }) =>
+  new Promise((resolve, reject) => {
+    const priceField = pricingMode === 'wholesale' ? 'wholesale_price' : 'retail_price';
+    const stockCondition = includeOutOfStock ? '' : 'AND quantity > 0';
+    
+    db.all(
+      `SELECT id, item_code, item_name, ${priceField} as price, quantity as stock_quantity,
+              minimum_qty, image_path
+       FROM items 
+       WHERE status_id = 1 ${stockCondition}
+       ORDER BY item_name ASC
+       LIMIT ? OFFSET ?`,
+      [limit, offset],
+      (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      }
+    );
+  });
+
+/**
+ * Count items for billing
+ */
+exports.countItemsForBilling = ({ includeOutOfStock = true }) =>
+  new Promise((resolve, reject) => {
+    const stockCondition = includeOutOfStock ? '' : 'AND quantity > 0';
+    
+    db.get(
+      `SELECT COUNT(*) as total FROM items WHERE status_id = 1 ${stockCondition}`,
+      [],
+      (err, row) => {
+        if (err) reject(err);
+        else resolve(row?.total || 0);
+      }
+    );
+  });
